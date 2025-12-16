@@ -14,10 +14,10 @@ public class EmailService {
     private String getEmail(String username) {
         // Mocks for testing. User must replace these emails.
         return switch (username) {
-            case "pm_user" -> "PM_USER_EMAIL@example.com";
-            case "po_user" -> "PO_USER_EMAIL@example.com";
-            case "rp_user" -> "RP_USER_EMAIL@example.com";
-            default -> "admin@example.com";
+            case "pm_user" -> "hanumanthumanoj143@gmail.com";
+            case "po_user" -> "hanumanthumanoj143@gmail.com";
+            case "rp_user" -> "hanumanthumanoj143@gmail.com";
+            default -> "hanumanthumanoj143@gmail.com";
         };
     }
 
@@ -26,7 +26,7 @@ public class EmailService {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             // Use mail sender username from application.properties
-            message.setFrom("YOUR_GMAIL_USERNAME@gmail.com");
+            message.setFrom("hanumanthumanoj143@gmail.com");
             message.setTo(toEmail);
             message.setSubject("FraUAS SMT: " + subject);
             message.setText(body);
