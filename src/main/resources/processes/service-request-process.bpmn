@@ -1,3 +1,5 @@
+<!-- The Cause: In your delegates (like RejectRequestDelegate and PublishToProvidersDelegate), you are updating the status in the database AND Camunda is trying to save the process state simultaneously. Because they happen too fast, they collide. -->
+<!-- The Fix: We must ensure the Delegate logic is "Async" (Asynchronous). This tells Camunda: "Save the state first, then run this Java code safely." -->
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:activiti="http://www.activiti.org/test"
@@ -13,86 +15,70 @@
            isExecutable="true"
            camunda:historyTimeToLive="P90D">
 
-    <!-- ================================================= -->
-    <!-- START -->
-    <!-- ================================================= -->
+    <!-- Start -->
     <startEvent id="startEvent" name="Start" />
 
-    <!-- ================================================= -->
-    <!-- AUTOMATED CHECKS -->
-    <!-- ================================================= -->
+    <!-- PM Review -->
+    <userTask id="reviewRequest"
+              name="Review / Revise Request"
+              camunda:assignee="project_manager" />
+
+    <!-- Automated checks -->
     <serviceTask id="checkInternal"
                  name="Check Internal Workforce"
-                 camunda:delegateExpression="${checkInternalResourceDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${checkInternalResourceDelegate}" />
 
     <serviceTask id="checkContract"
                  name="Validate Contract"
-                 camunda:delegateExpression="${checkContractDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${checkContractDelegate}" />
 
-    <!-- ================================================= -->
-    <!-- PROCUREMENT APPROVAL -->
-    <!-- ================================================= -->
+    <!-- Procurement approval -->
     <userTask id="procurementApproval"
               name="Approve Request: ${title}"
               camunda:assignee="procurement_officer" />
 
     <exclusiveGateway id="gatewayApproval" name="Approved?" />
 
-    <!-- ================================================= -->
-    <!-- PROVIDER FLOW -->
-    <!-- ================================================= -->
+    <!-- Publish & fetch offers -->
     <serviceTask id="publishToProviders"
                  name="Publish to Providers"
-                 camunda:delegateExpression="${publishToProvidersDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${publishToProvidersDelegate}" />
 
-    <!-- OPTIONAL semantic receive (non-blocking) -->
+    <!-- OPTIONAL: passive receive task (non-blocking / semantic only) -->
     <receiveTask id="waitForOffers"
                  name="Offers Received (Auto)"
                  camunda:asyncBefore="true" />
 
+    <!-- RP evaluates offers -->
     <userTask id="evaluateOffers"
               name="Evaluate Offer: ${title}"
               camunda:assignee="resource_planner" />
 
+    <!-- Final verification -->
     <userTask id="finalVerification"
               name="Final Verification: ${title}"
               camunda:assignee="procurement_officer" />
 
     <exclusiveGateway id="gatewayVerification" name="Verified?" />
 
-    <!-- ================================================= -->
-    <!-- FINALIZATION -->
-    <!-- ================================================= -->
+    <!-- Finalization -->
     <serviceTask id="finalizeRequest"
                  name="Finalize Request Status"
-                 camunda:delegateExpression="${finalizeRequestDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${finalizeRequestDelegate}" />
 
     <serviceTask id="notifyProvider"
                  name="Notify Provider"
-                 camunda:delegateExpression="${notifyProviderDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${notifyProviderDelegate}" />
 
     <endEvent id="endEvent" name="Completed" />
 
-    <!-- ================================================= -->
-    <!-- REJECTION HANDLING -->
-    <!-- ================================================= -->
+    <!-- Rejection handler -->
     <serviceTask id="rejectUpdate"
                  name="Update Status: Rejected"
-                 camunda:delegateExpression="${rejectRequestDelegate}"
-                 camunda:asyncBefore="true" />
+                 camunda:delegateExpression="${rejectRequestDelegate}" />
 
-    <userTask id="reviewRequest"
-              name="Review / Revise Request"
-              camunda:assignee="project_manager" />
-
-    <!-- ================================================= -->
     <!-- SEQUENCE FLOWS -->
-    <!-- ================================================= -->
+
     <sequenceFlow id="f1" sourceRef="startEvent" targetRef="checkInternal" />
     <sequenceFlow id="f2" sourceRef="checkInternal" targetRef="checkContract" />
     <sequenceFlow id="f3" sourceRef="checkContract" targetRef="procurementApproval" />
@@ -114,7 +100,8 @@
       </conditionExpression>
     </sequenceFlow>
 
-    <!-- Skip blocking wait -->
+    <!-- 🔥 CRITICAL FIX -->
+    <!-- Skip blocking wait, go straight to RP -->
     <sequenceFlow id="f5"
                   sourceRef="publishToProviders"
                   targetRef="evaluateOffers" />
