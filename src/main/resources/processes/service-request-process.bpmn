@@ -1,6 +1,4 @@
-<!-- The Cause: In your delegates (like RejectRequestDelegate and PublishToProvidersDelegate), you are updating the status in the database AND Camunda is trying to save the process state simultaneously. Because they happen too fast, they collide. -->
-<!-- The Fix: We must ensure the Delegate logic is "Async" (Asynchronous). This tells Camunda: "Save the state first, then run this Java code safely." -->
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:activiti="http://www.activiti.org/test"
              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
