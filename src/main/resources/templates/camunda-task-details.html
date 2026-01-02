@@ -1,191 +1,252 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Task Action</title>
+    <title>Task Details</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
-            min-height: 100vh;
-            padding-bottom: 50px;
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+
+        .task-card {
+            background: white; border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            padding: 30px; margin-top: 40px;
+            max-width: 950px; margin-left: auto; margin-right: auto;
         }
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        .glass-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 0;
-            overflow: hidden;
-            margin-top: 40px;
-        }
-        .header-section {
-            background: #f8f9fa;
-            padding: 20px 30px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .content-section { padding: 30px; }
-        .details-box {
-            background: #f1f3f5;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
-            border-left: 5px solid #2c3e50;
-        }
-        .btn-back { color: #666; text-decoration: none; font-weight: 600; }
-        .btn-back:hover { color: #333; }
-        .form-label { font-weight: 600; color: #444; }
-        .form-select, .form-control { border-radius: 8px; padding: 10px; }
-        .btn-submit {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .btn-primary-custom { background: #2c3e50; color: white; border: none; }
-        .btn-primary-custom:hover { background: #34495e; }
-        .btn-success-custom { background: #198754; color: white; border: none; }
-        .btn-success-custom:hover { background: #157347; }
+        .header { border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 25px; }
+        .info-label { font-size: 0.8rem; text-transform: uppercase; color: #888; font-weight: 600; }
+        .info-value { font-size: 1rem; font-weight: 500; color: #333; }
+
+        .highlight-box { background: #f8f9fa; border-radius: 8px; padding: 15px; border-left: 4px solid #2c3e50; }
+
+        /* History Chat Box */
+        .history-box { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 15px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; color: #555; white-space: pre-wrap; }
+
+        /* Offer Card for PO */
+        .offer-summary-card { border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; overflow: hidden; }
+        .offer-header { background: #e8f4f8; padding: 10px 15px; border-bottom: 1px solid #e0e0e0; font-weight: bold; color: #2980b9; }
+        .offer-body { padding: 15px; }
     </style>
+
     <script>
-        function toggleReason(selectElement, divId, inputId) {
-            const reasonDiv = document.getElementById(divId);
-            const reasonInput = document.getElementById(inputId);
-            if (selectElement.value === 'false') {
-                reasonDiv.style.display = 'block';
-                reasonInput.setAttribute('required', 'required');
+        function toggleReason(select, divId) {
+            var div = document.getElementById(divId);
+            var textarea = div.querySelector('textarea');
+
+            if (select.value === 'false') {
+                // REJECT: Show box & make mandatory
+                div.style.display = 'block';
+                textarea.setAttribute('required', 'required');
             } else {
-                reasonDiv.style.display = 'none';
-                reasonInput.removeAttribute('required');
-                reasonInput.value = '';
+                // APPROVE: Hide box & remove mandatory
+                div.style.display = 'none';
+                textarea.removeAttribute('required');
+                textarea.value = '';
             }
         }
     </script>
 </head>
+
 <body>
 
-<div class="container" style="max-width: 800px;">
-    <div class="glass-container">
+<div class="container">
+    <div class="task-card">
 
-        <div class="header-section">
+        <div class="header d-flex justify-content-between align-items-center">
             <div>
-                <h4 class="mb-0 text-dark"><i class="fas fa-clipboard-check me-2 text-primary"></i> <span th:text="${task.name}"></span></h4>
-                <small class="text-muted">Created: <span th:text="${#dates.format(task.createTime, 'dd.MM.yyyy HH:mm')}"></span></small>
+                <h4 class="text-primary m-0">
+                    <i class="fas fa-clipboard-check me-2"></i> <span th:text="${task.name}">Task</span>
+                </h4>
+                <small class="text-muted">Task ID: <span th:text="${task.id}"></span></small>
             </div>
-            <a th:href="@{/camunda/tasks/{assignee}(assignee=${#authentication.name})}" class="btn-back">
-                <i class="fas fa-times"></i> Close
-            </a>
+            <a href="/camunda/tasks" class="btn btn-outline-secondary btn-sm rounded-pill">Close</a>
         </div>
 
-        <div class="content-section">
-
-            <div class="details-box" th:if="${requestDetails}">
-                <h6 class="text-uppercase text-secondary mb-3" style="font-size: 0.8rem;">Request Overview</h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <strong>Title:</strong> <span th:text="${requestDetails.title}"></span><br>
-                        <small class="text-muted">Context: <span th:text="${requestDetails.projectContext}"></span></small>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Skills:</strong> <span th:text="${requestDetails.requiredSkills}"></span><br>
-                        <small class="text-muted">Duration: <span th:text="${requestDetails.durationDays}"></span> days</small>
-                    </div>
-                    <div class="col-12 mt-2">
-                        <strong>Description:</strong> <span class="d-block text-muted mt-1" th:text="${requestDetails.description}"></span>
+        <div th:if="${requestDetails}" class="mb-4">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <div class="info-label">Project Title</div>
+                    <div class="info-value fs-5" th:text="${requestDetails.title}"></div>
+                    <div class="text-muted small" th:text="${requestDetails.description}"></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="highlight-box">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="info-label">Budget Cap</span>
+                            <span class="fw-bold text-success" th:text="'€' + ${requestDetails.maxDailyRate}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="info-label">Deadline</span>
+                            <span th:text="${requestDetails.submissionDeadline}"></span>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <form th:if="${#strings.containsIgnoreCase(task.name, 'Approve')}"
-                  th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
-                <div class="mb-3">
-                    <label class="form-label">Decision</label>
-                    <select name="approved" class="form-select" onchange="toggleReason(this, 'rejectDivPO', 'rejectInputPO')">
-                        <option value="true"> Approve & Publish</option>
-                        <option value="false"> Reject Request</option>
-                    </select>
+        <div th:if="${commentHistory}" class="mb-4">
+            <h6 class="text-secondary"><i class="fas fa-history me-2"></i> Approval History</h6>
+            <div class="history-box" th:text="${commentHistory}"></div>
+        </div>
+
+        <div th:if="${task.taskDefinitionKey == 'Activity_PO_Approval'}" class="mt-4">
+            <div class="alert alert-warning border-warning">
+                <h6 class="alert-heading"><i class="fas fa-balance-scale me-2"></i>Procurement Review Required</h6>
+                <p class="mb-0 small">Verify budget and compliance before publishing.</p>
+            </div>
+            <form th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+                <select name="approved" class="form-select form-select-lg mb-3" onchange="toggleReason(this,'rejectDiv1')">
+                    <option value="true">✅ Approve & Publish</option>
+                    <option value="false">❌ Reject Request</option>
+                </select>
+                <div id="rejectDiv1" style="display:none;">
+                    <label class="form-label text-danger fw-bold">Rejection Reason</label>
+                    <textarea name="rejectionReason" class="form-control" rows="2" placeholder="Why is this rejected?"></textarea>
                 </div>
-                <div id="rejectDivPO" class="mb-3" style="display:none;">
-                    <label class="form-label text-danger">Rejection Reason</label>
-                    <input type="text" id="rejectInputPO" name="rejectionReason" class="form-control" placeholder="Required...">
-                </div>
-                <button type="submit" class="btn btn-submit btn-primary-custom">Submit Decision</button>
+                <button class="btn btn-warning w-100 fw-bold mt-3">Submit Decision</button>
             </form>
+        </div>
 
-            <form th:if="${#strings.containsIgnoreCase(task.name, 'Evaluate')}"
-                  th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
-
-                <div class="mb-4" th:if="${offers != null and !offers.empty}">
-                    <label class="form-label mb-2">Compare Offers</label>
-                    <table class="table table-bordered table-sm bg-white text-center small">
-                        <thead class="table-light"><tr><th>Provider</th><th>Rate</th><th>Days</th><th>Profile</th></tr></thead>
+        <div th:if="${task.taskDefinitionKey == 'Activity_PM_Evaluate'}" class="mt-4">
+            <h5 class="text-secondary border-bottom pb-2 mb-3">Step 1: Score Offers</h5>
+            <form th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Provider</th>
+                            <th>Total Cost (€)</th>
+                            <th width="100">Tech</th>
+                            <th>Total</th>
+                        </tr>
+                        </thead>
                         <tbody>
                         <tr th:each="offer : ${offers}">
-                            <td class="fw-bold text-start" th:text="${offer.providerName}"></td>
-                            <td th:text="'€' + ${offer.proposedRate}"></td>
-                            <td th:text="${offer.deliveryTimeDays}"></td>
-                            <td class="text-muted" th:text="${offer.expertProfile}"></td>
+                            <td>
+                                <strong th:text="${offer.providerName}"></strong><br>
+                                <small th:text="${offer.specialistName}"></small>
+                            </td>
+                            <td th:text="${offer.totalCost}"></td>
+                            <td><input type="number" min="0" max="100" th:name="'techScore_' + ${offer.id}" th:value="${offer.technicalScore}" class="form-control form-control-sm text-center"></td>
+                            <td class="fw-bold text-primary" th:text="${offer.totalScore}"></td>
                         </tr>
                         </tbody>
                     </table>
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Select Winner</label>
-                    <select name="selectedOfferId" class="form-select" required>
-                        <option value="">-- Choose --</option>
-                        <option th:each="offer : ${offers}" th:value="${offer.id}" th:text="${offer.providerName} + ' (€' + ${offer.proposedRate} + ')'"></option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Justification</label>
-                    <textarea name="selectionReason" class="form-control" rows="2" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-submit btn-success-custom">Confirm Selection</button>
+                <h5 class="text-secondary border-bottom pb-2 mb-3">Step 2: Select Winner</h5>
+                <select name="selectedOfferId" class="form-select form-select-lg mb-3" required>
+                    <option value="">-- Choose Best Offer --</option>
+                    <option th:each="offer : ${offers}" th:value="${offer.id}" th:text="${offer.providerName + ' (' + offer.totalScore + ')'}"></option>
+                </select>
+                <textarea name="selectionReason" class="form-control mb-3" rows="2" placeholder="Justification for selection..." required></textarea>
+                <button class="btn btn-primary w-100">Confirm Selection</button>
             </form>
+        </div>
 
-            <form th:if="${#strings.containsIgnoreCase(task.name, 'Verif')}"
-                  th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+        <div th:if="${task.taskDefinitionKey == 'Activity_PO_Validate'}" class="mt-4">
 
-                <div class="alert alert-info d-flex align-items-center">
-                    <i class="fas fa-info-circle fa-2x me-3"></i>
-                    <div>
-                        <strong>Selected:</strong> <span th:text="${selectedOffer?.providerName}"></span><br>
-                        <small>Rate: €<span th:text="${selectedOffer?.proposedRate}"></span> | Reason: <span th:text="${selectionReason}"></span></small>
+            <div class="alert alert-info border-info">
+                <h5 class="alert-heading"><i class="fas fa-file-contract me-2"></i>Contract Validation</h5>
+                <p class="mb-0">The PM has selected a provider. Please review the financial details below.</p>
+            </div>
+
+            <div class="offer-summary-card mb-4">
+                <div class="offer-header d-flex justify-content-between">
+                    <span><i class="fas fa-trophy me-2"></i>Winner Selected by PM</span>
+                    <span class="badge bg-success">SELECTED</span>
+                </div>
+                <div class="offer-body" th:if="${selectedOffer}">
+                    <div class="row">
+                        <div class="col-md-6 border-end">
+                            <div class="info-label">Provider</div>
+                            <div class="info-value mb-3" th:text="${selectedOffer.providerName}"></div>
+
+                            <div class="info-label">Specialist</div>
+                            <div class="info-value" th:text="${selectedOffer.specialistName}"></div>
+                        </div>
+                        <div class="col-md-6 ps-4">
+                            <div class="info-label">Total Contract Value</div>
+                            <div class="info-value text-success fs-4 mb-3" th:text="'€' + ${selectedOffer.totalCost}"></div>
+
+                            <div class="info-label">PM's Justification</div>
+                            <div class="info-value fst-italic text-muted">
+                                "<span th:text="${selectionReason}"></span>"
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <input type="hidden" name="selectedOfferId" th:if="${selectedOffer}" th:value="${selectedOffer.id}">
-
-                <div class="mb-3">
-                    <label class="form-label">Final Decision</label>
-                    <select name="verified" class="form-select" onchange="toggleReason(this, 'rejectDivVerify', 'rejectInputVerify')">
-                        <option value="true"> Verify & Sign</option>
-                        <option value="false"> Reject</option>
-                    </select>
+                <div class="offer-body text-danger" th:unless="${selectedOffer}">
+                    Error: Offer details could not be loaded. Please check system logs.
                 </div>
-                <div id="rejectDivVerify" class="mb-3" style="display:none;">
-                    <label class="form-label text-danger">Rejection Reason</label>
-                    <input type="text" id="rejectInputVerify" name="rejectionReason" class="form-control" placeholder="Required...">
+            </div>
+
+            <form th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+                <label class="form-label fw-bold">Decision:</label>
+                <select name="verified" class="form-select form-select-lg mb-3" onchange="toggleReason(this,'rejectDiv2')">
+                    <option value="true"> Verify & Sign Contract</option>
+                    <option value="false"> Reject Selection </option>
+                </select>
+
+                <div id="rejectDiv2" style="display:none;">
+                    <label class="form-label text-danger fw-bold">Reason for Rejection:</label>
+                    <textarea name="rejectionReason" class="form-control" rows="2" placeholder="Why is this selection invalid? (e.g. Too expensive)"></textarea>
                 </div>
-                <button type="submit" class="btn btn-submit btn-primary-custom">Finalize</button>
+
+                <button class="btn btn-success w-100 py-2 fw-bold">Finalize Decision</button>
             </form>
-
         </div>
+
+        <div th:if="${task.taskDefinitionKey == 'Activity_PM_Fix'}" class="mt-4">
+            <div class="alert alert-danger border-danger">
+                <h5 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i><span th:text="${task.name}">Action Required</span></h5>
+                <hr>
+                <strong>Reason:</strong>
+                <p class="mb-0 mt-1 fst-italic text-dark" th:text="${rejectionReason != null ? rejectionReason : 'No details.'}"></p>
+            </div>
+            <div class="card mb-4">
+                <div class="card-header bg-light fw-bold">Your Action Plan</div>
+                <div class="card-body">
+                    <form th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Your Reply / Correction</label>
+                            <textarea name="pmJustification" class="form-control" rows="3" placeholder="Explain your fix here..." required></textarea>
+                        </div>
+                        <input type="hidden" name="resubmitted" value="true"/>
+                        <button class="btn btn-primary w-100"><i class="fas fa-redo me-2"></i> Resubmit to Procurement</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${task.taskDefinitionKey == 'Activity_RP_Coordination'}" class="mt-4">
+            <div class="alert alert-success border-success">
+                <strong><i class="fas fa-calendar-alt me-2"></i>Ready for Onboarding</strong>
+                <p class="mb-0">Contract Signed. Please coordinate start date.</p>
+            </div>
+
+            <div class="offer-summary-card mb-3" th:if="${selectedOffer}">
+                <div class="offer-body">
+                    <strong>Specialist:</strong> <span th:text="${selectedOffer.specialistName}"></span><br>
+                    <strong>Provider:</strong> <span th:text="${selectedOffer.providerName}"></span><br>
+                    <strong>Start Date:</strong> <span th:text="${requestDetails.startDate}"></span>
+                </div>
+            </div>
+
+            <form th:action="@{/camunda/task/{taskId}/complete(taskId=${task.id})}" method="post">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="coordinationConfirmed" required>
+                    <label class="form-check-label">Specialist contacted and onboarding prepared</label>
+                </div>
+                <button class="btn btn-success w-100">Confirm & Create Order</button>
+            </form>
+        </div>
+
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

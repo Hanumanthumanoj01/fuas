@@ -1,229 +1,328 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>PM Dashboard</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        /* ANIMATED BACKGROUND */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
-            min-height: 100vh;
-            color: #333;
-        }
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+        body { background-color: #f4f6f9; }
+
+        .dashboard-header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
         }
 
-        /* GLASS NAVBAR */
-        .navbar {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
-        .navbar-brand, .nav-link, .btn-logout { color: white !important; font-weight: 600; }
-        .btn-logout { border: 1px solid rgba(255,255,255,0.5); border-radius: 20px; padding: 5px 15px; }
-        .btn-logout:hover { background: rgba(255,255,255,0.2); }
-
-        /* GLASS CARDS */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-        .card-header-custom {
-            border-bottom: 1px solid rgba(0,0,0,0.1);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            font-weight: 700;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* INPUTS & BUTTONS */
-        .form-control {
+        .stat-card {
+            border: none;
             border-radius: 10px;
-            border: 1px solid rgba(0,0,0,0.1);
-            background: rgba(255,255,255,0.9);
-        }
-        .btn-custom {
-            border-radius: 25px;
-            font-weight: 600;
-            padding: 8px 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: transform 0.2s;
         }
-        .btn-custom:hover { transform: translateY(-2px); }
-        .btn-create { background: #2c3e50; color: white; border: none; }
-        .btn-create:hover { background: #34495e; color: white; }
 
-        /* TABLE */
-        .table { --bs-table-bg: transparent; }
-        .table thead th { border-bottom: 2px solid rgba(0,0,0,0.1); color: #555; }
-        .badge-pill { border-radius: 50px; padding: 0.5em 1em; }
+        .stat-card:hover { transform: translateY(-5px); }
+
+        .nav-tabs .nav-link.active {
+            border-top: 3px solid #2c3e50;
+            font-weight: bold;
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
     </style>
 </head>
+
 <body>
 
-<nav class="navbar navbar-expand-lg mb-4">
-    <div class="container">
-        <a class="navbar-brand" href="#"><i class="fas fa-cube me-2"></i>Project Manager Dashboard</a>
-        <div class="d-flex align-items-center">
-            <span class="me-3 text-white"><i class="fas fa-user-circle me-1"></i> <span sec:authentication="name"></span></span>
-            <form th:action="@{/logout}" method="post">
-                <button type="submit" class="btn btn-logout"><i class="fas fa-sign-out-alt me-1"></i> Logout</button>
+<div class="dashboard-header">
+    <div class="container d-flex justify-content-between align-items-center">
+        <h3 class="m-0">
+            <i class="fas fa-chart-line me-2"></i> Service Management Tool
+        </h3>
+        <div>
+            <span class="me-3">
+                Welcome, <span sec:authentication="name" class="fw-bold"></span>
+            </span>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <button class="btn btn-outline-light btn-sm rounded-pill">
+                    Logout
+                </button>
             </form>
-        </div>
-    </div>
-</nav>
-
-<div class="container">
-
-    <div class="row">
-        <div class="col-md-4">
-            <div class="glass-card d-flex justify-content-center align-items-center">
-                <div style="width: 180px; height: 180px;">
-                    <canvas id="statusChart"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-8">
-            <div class="glass-card">
-                <div class="card-header-custom"><i class="fas fa-plus-circle me-2"></i> Create New Request</div>
-                <form th:action="@{/service-requests}" th:object="${newRequest}" method="post">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="small text-muted fw-bold">Project Title</label>
-                            <input type="text" class="form-control" th:field="*{title}" placeholder="e.g. Cloud Migration" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="small text-muted fw-bold">Duration (Days)</label>
-                            <input type="number" class="form-control" th:field="*{durationDays}" placeholder="30" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="small text-muted fw-bold">Context</label>
-                            <input type="text" class="form-control" th:field="*{projectContext}" placeholder="Internal/External" required>
-                        </div>
-                        <div class="col-12">
-                            <label class="small text-muted fw-bold">Description</label>
-                            <textarea class="form-control" th:field="*{description}" placeholder="Detailed requirements..." rows="2" required></textarea>
-                        </div>
-                        <div class="col-12">
-                            <label class="small text-muted fw-bold">Required Skills</label>
-                            <input type="text" class="form-control" th:field="*{requiredSkills}" placeholder="Java, AWS, React..." required>
-                        </div>
-                    </div>
-                    <div class="text-end mt-3">
-                        <button type="submit" class="btn btn-custom btn-create">Create Request <i class="fas fa-paper-plane ms-1"></i></button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="glass-card">
-        <div class="card-header-custom d-flex justify-content-between align-items-center">
-            <span><i class="fas fa-list-ul me-2"></i> Request History</span>
-
-            <div style="width: 200px;">
-                <select class="form-select form-select-sm" id="statusFilter" onchange="filterTable()">
-                    <option value="all">Show All</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="REJECTED">Rejected</option>
-                    <option value="WAITING">Pending</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table align-middle">
-                <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="request : ${serviceRequests}">
-                    <td class="fw-bold" th:text="${request.title}"></td>
-                    <td>
-                        <span class="badge badge-pill"
-                              th:classappend="${
-                                  request.status.name() == 'DRAFT' ? 'bg-secondary' :
-                                  (request.status.name() == 'COMPLETED' ? 'bg-success' :
-                                  (request.status.name() == 'REJECTED' ? 'bg-danger' : 'bg-warning text-dark'))
-                              }"
-                              th:text="${request.status}">
-                        </span>
-                        <div th:if="${request.status.name() == 'REJECTED' and request.rejectionReason != null}"
-                             class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-triangle"></i> <span th:text="${request.rejectionReason}"></span>
-                        </div>
-                    </td>
-                    <td class="text-muted small" th:text="${#temporals.format(request.createdAt, 'dd.MM.yyyy')}"></td>
-                    <td class="text-end">
-                        <a th:href="@{/service-requests/{id}(id=${request.id})}" class="btn btn-sm btn-outline-dark rounded-pill me-1">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <form th:if="${request.status.name() == 'DRAFT'}" th:action="@{/service-requests/{id}/process(id=${request.id})}" method="post" style="display:inline;">
-                            <button type="submit" class="btn btn-sm btn-primary rounded-pill">Start</button>
-                        </form>
-                        <form th:action="@{/service-requests/{id}/delete(id=${request.id})}" method="post" style="display:inline;" onsubmit="return confirm('Delete?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill"><i class="fas fa-trash"></i></button>
-                        </form>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
         </div>
     </div>
 </div>
 
-<script th:inline="javascript">
-    /* Chart Logic */
-    const requests = [[${serviceRequests}]];
-    const statusCounts = { DRAFT: 0, PUBLISHED: 0, OFFERS_RECEIVED: 0, REJECTED: 0, COMPLETED: 0, WAITING_APPROVAL: 0 };
-    requests.forEach(r => { if (statusCounts[r.status] !== undefined) statusCounts[r.status]++; });
+<div class="container">
 
-    new Chart(document.getElementById('statusChart'), {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(statusCounts),
-            datasets: [{
-                data: Object.values(statusCounts),
-                backgroundColor: ['#6c757d', '#0dcaf0', '#ffc107', '#dc3545', '#198754', '#fd7e14'],
-                borderWidth: 0
-            }]
-        },
-        options: { plugins: { legend: { display: false } }, cutout: '70%' }
-    });
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stat-card bg-primary text-white p-3">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Active Requests</h5>
+                        <h2 th:text="${activeCount}">0</h2>
+                    </div>
+                    <i class="fas fa-cog fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
 
-    /* Filter Logic */
-    function filterTable() {
-        const filter = document.getElementById('statusFilter').value;
-        const rows = document.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-            const statusText = row.querySelector('.badge').innerText;
-            if (filter === 'all') row.style.display = '';
-            else if (filter === 'WAITING' && (statusText.includes('WAITING') || statusText.includes('DRAFT'))) row.style.display = '';
-            else if (statusText.includes(filter)) row.style.display = '';
-            else row.style.display = 'none';
-        });
+        <div class="col-md-4">
+            <div class="card stat-card bg-warning text-dark p-3">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Drafts</h5>
+                        <h2 th:text="${draftCount}">0</h2>
+                    </div>
+                    <i class="fas fa-pencil-alt fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card stat-card bg-success text-white p-3">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Completed</h5>
+                        <h2 th:text="${completedCount}">0</h2>
+                    </div>
+                    <i class="fas fa-check-circle fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="myTab">
+        <li class="nav-item">
+            <button class="nav-link active" id="tasks-tab"
+                    data-bs-toggle="tab" data-bs-target="#tasks">
+                <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                Actions Required (<span th:text="${activeTasks.size()}"></span>)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="all-tab"
+                    data-bs-toggle="tab" data-bs-target="#all">
+                <i class="fas fa-list me-2"></i> All Requests (History)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="create-tab"
+                    data-bs-toggle="tab" data-bs-target="#create">
+                <i class="fas fa-plus me-2"></i> Create New
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <div class="tab-pane fade show active" id="tasks">
+            <div class="table-card">
+
+                <div th:if="${activeTasks.empty}"
+                     class="text-center py-4 text-muted">
+                    <i class="fas fa-check fa-2x mb-2"></i><br>
+                    No pending actions.
+                </div>
+
+                <div th:unless="${activeTasks.empty}" class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Task Name</th>
+                            <th>Process ID</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="task : ${activeTasks}">
+                            <td class="fw-bold text-primary" th:text="${task.name}"></td>
+                            <td th:text="${task.processInstanceId}"></td>
+                            <td th:text="${#dates.format(task.createTime, 'dd.MM HH:mm')}"></td>
+                            <td>
+                                <a th:href="@{/camunda/task/{id}(id=${task.id})}"
+                                   class="btn btn-sm btn-danger rounded-pill px-3">
+                                    Process Now <i class="fas fa-arrow-right"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="all">
+            <div class="table-card">
+
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Contract ID</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <tr th:each="req : ${serviceRequests}">
+                        <td th:text="${req.id}"></td>
+
+                        <td class="fw-bold" th:text="${req.title}"></td>
+
+                        <td>
+                            <span class="badge rounded-pill"
+                                  th:classappend="${
+                                      req.status.name() == 'DRAFT' ? 'bg-secondary' :
+                                      req.status.name() == 'COMPLETED' ? 'bg-success' :
+                                      req.status.name() == 'REJECTED' ? 'bg-danger' :
+                                      'bg-warning text-dark'
+                                  }"
+                                  th:text="${req.status}">
+                            </span>
+                        </td>
+
+                        <td th:text="${#temporals.format(req.createdAt, 'dd.MM.yyyy')}"></td>
+
+                        <td th:text="${req.contractId}"></td>
+
+                        <td>
+
+                            <form th:if="${req.status.name() == 'DRAFT'}"
+                                  th:action="@{/service-requests/{id}/process(id=${req.id})}"
+                                  method="post" class="d-inline">
+                                <button class="btn btn-sm btn-primary">
+                                    Start <i class="fas fa-play"></i>
+                                </button>
+                            </form>
+
+                            <a th:if="${req.status.name() == 'REJECTED'}"
+                               href="#tasks"
+                               onclick="var tab = new bootstrap.Tab(document.querySelector('#tasks-tab')); tab.show();"
+                               class="btn btn-sm btn-danger">
+                                Fix Issue <i class="fas fa-wrench"></i>
+                            </a>
+
+                            <a th:if="${req.status.name() != 'DRAFT' && req.status.name() != 'REJECTED'}"
+                               th:href="@{/service-requests/{id}(id=${req.id})}"
+                               class="btn btn-sm btn-outline-secondary">
+                                Details <i class="fas fa-eye"></i>
+                            </a>
+
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="create">
+            <div class="table-card">
+                <h5 class="mb-3">New Service Request</h5>
+
+                <form th:action="@{/service-requests}"
+                      th:object="${newRequest}" method="post">
+
+                    <div class="row g-3">
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Title</label>
+                            <input type="text" class="form-control"
+                                   th:field="*{title}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Project Context</label>
+                            <input type="text" class="form-control"
+                                   th:field="*{projectContext}" required>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" class="form-control"
+                                   th:field="*{startDate}" id="startDate"
+                                   onchange="calcDays()">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">End Date</label>
+                            <input type="date" class="form-control"
+                                   th:field="*{endDate}" id="endDate"
+                                   onchange="calcDays()">
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label">Duration (Days)</label>
+                            <input type="number" class="form-control"
+                                   th:field="*{durationDays}"
+                                   id="durationDays" readonly>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label">Min Exp (Yrs)</label>
+                            <input type="number" class="form-control"
+                                   th:field="*{minExperience}" value="3">
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label">Max Rate (€)</label>
+                            <input type="number" class="form-control"
+                                   th:field="*{maxDailyRate}">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Required Skills</label>
+                            <textarea class="form-control"
+                                      th:field="*{requiredSkills}" rows="2"></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control"
+                                      th:field="*{description}" rows="3"></textarea>
+                        </div>
+
+                        <div class="col-12 text-end">
+                            <button type="submit"
+                                    class="btn btn-success px-4">
+                                Create Draft
+                            </button>
+                        </div>
+
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function calcDays() {
+        const s = new Date(document.getElementById('startDate').value);
+        const e = new Date(document.getElementById('endDate').value);
+        if (s && e && e > s) {
+            document.getElementById('durationDays').value =
+                Math.ceil((e - s) / (1000 * 60 * 60 * 24));
+        }
     }
 </script>
+
 </body>
 </html>

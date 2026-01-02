@@ -1,156 +1,140 @@
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:activiti="http://www.activiti.org/test"
              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             id="Definitions_02m23tv"
-             targetNamespace="http://camunda.org/examples">
+             id="Definitions_1"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             exporter="Camunda Modeler"
+             exporterVersion="4.6.0">
 
-  <process id="service-request-process"
-           isExecutable="true"
-           camunda:historyTimeToLive="P90D">
+  <process id="service-request-process" name="External Service Procurement" isExecutable="true" camunda:historyTimeToLive="P180D">
 
-    <!-- Start -->
-    <startEvent id="startEvent" name="Start" />
+    <startEvent id="StartEvent_1" name="Request Submitted">
+      <outgoing>Flow_1</outgoing>
+    </startEvent>
 
-    <!-- PM Review -->
-    <userTask id="reviewRequest"
-              name="Review / Revise Request"
-              camunda:assignee="project_manager" />
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_CheckInternal" />
 
-    <!-- Automated checks -->
-    <serviceTask id="checkInternal"
-                 name="Check Internal Workforce"
-                 camunda:delegateExpression="${checkInternalResourceDelegate}" />
+    <serviceTask id="Activity_CheckInternal" name="Check Internal Workforce" camunda:delegateExpression="${checkInternalResourceDelegate}">
+      <outgoing>Flow_2</outgoing>
+    </serviceTask>
 
-    <serviceTask id="checkContract"
-                 name="Validate Contract"
-                 camunda:delegateExpression="${checkContractDelegate}" />
+    <sequenceFlow id="Flow_2" sourceRef="Activity_CheckInternal" targetRef="Gateway_InternalCheck" />
 
-    <!-- Procurement approval -->
-    <userTask id="procurementApproval"
-              name="Approve Request: ${title}"
-              camunda:assignee="procurement_officer" />
+    <exclusiveGateway id="Gateway_InternalCheck" name="Internal Resource Available?">
+      <incoming>Flow_2</incoming>
+      <outgoing>Flow_Internal_Success</outgoing>
+      <outgoing>Flow_Internal_Fail</outgoing>
+    </exclusiveGateway>
 
-    <exclusiveGateway id="gatewayApproval" name="Approved?" />
-
-    <!-- Publish & fetch offers -->
-    <serviceTask id="publishToProviders"
-                 name="Publish to Providers"
-                 camunda:delegateExpression="${publishToProvidersDelegate}" />
-
-    <!-- OPTIONAL: passive receive task (non-blocking / semantic only) -->
-    <receiveTask id="waitForOffers"
-                 name="Offers Received (Auto)"
-                 camunda:asyncBefore="true" />
-
-    <!-- RP evaluates offers -->
-    <userTask id="evaluateOffers"
-              name="Evaluate Offer: ${title}"
-              camunda:assignee="resource_planner" />
-
-    <!-- Final verification -->
-    <userTask id="finalVerification"
-              name="Final Verification: ${title}"
-              camunda:assignee="procurement_officer" />
-
-    <exclusiveGateway id="gatewayVerification" name="Verified?" />
-
-    <!-- Finalization -->
-    <serviceTask id="finalizeRequest"
-                 name="Finalize Request Status"
-                 camunda:delegateExpression="${finalizeRequestDelegate}" />
-
-    <serviceTask id="notifyProvider"
-                 name="Notify Provider"
-                 camunda:delegateExpression="${notifyProviderDelegate}" />
-
-    <endEvent id="endEvent" name="Completed" />
-
-    <!-- Rejection handler -->
-    <serviceTask id="rejectUpdate"
-                 name="Update Status: Rejected"
-                 camunda:delegateExpression="${rejectRequestDelegate}" />
-
-    <!-- SEQUENCE FLOWS -->
-
-    <sequenceFlow id="f1" sourceRef="startEvent" targetRef="checkInternal" />
-    <sequenceFlow id="f2" sourceRef="checkInternal" targetRef="checkContract" />
-    <sequenceFlow id="f3" sourceRef="checkContract" targetRef="procurementApproval" />
-    <sequenceFlow id="f4" sourceRef="procurementApproval" targetRef="gatewayApproval" />
-
-    <sequenceFlow id="flowApproveYes"
-                  sourceRef="gatewayApproval"
-                  targetRef="publishToProviders">
-      <conditionExpression xsi:type="tFormalExpression">
-        ${approved == true}
-      </conditionExpression>
+    <sequenceFlow id="Flow_Internal_Success" name="Yes" sourceRef="Gateway_InternalCheck" targetRef="EndEvent_InternalFound">
+      <conditionExpression xsi:type="tFormalExpression">${internalResourceAvailable == true}</conditionExpression>
     </sequenceFlow>
 
-    <sequenceFlow id="flowApproveNo"
-                  sourceRef="gatewayApproval"
-                  targetRef="rejectUpdate">
-      <conditionExpression xsi:type="tFormalExpression">
-        ${approved == false}
-      </conditionExpression>
+    <endEvent id="EndEvent_InternalFound" name="Request Cancelled (Internal Found)" />
+
+    <sequenceFlow id="Flow_Internal_Fail" name="No" sourceRef="Gateway_InternalCheck" targetRef="Activity_CheckContract">
+      <conditionExpression xsi:type="tFormalExpression">${internalResourceAvailable == false}</conditionExpression>
     </sequenceFlow>
 
-    <!-- 🔥 CRITICAL FIX -->
-    <!-- Skip blocking wait, go straight to RP -->
-    <sequenceFlow id="f5"
-                  sourceRef="publishToProviders"
-                  targetRef="evaluateOffers" />
+    <serviceTask id="Activity_CheckContract" name="Validate Contract" camunda:delegateExpression="${checkContractDelegate}">
+      <outgoing>Flow_3</outgoing>
+    </serviceTask>
 
-    <sequenceFlow id="f7"
-                  sourceRef="evaluateOffers"
-                  targetRef="finalVerification" />
+    <sequenceFlow id="Flow_3" sourceRef="Activity_CheckContract" targetRef="Activity_PO_Approval" />
 
-    <sequenceFlow id="f8"
-                  sourceRef="finalVerification"
-                  targetRef="gatewayVerification" />
+    <userTask id="Activity_PO_Approval" name="${title}" camunda:assignee="po_user">
+      <incoming>Flow_3</incoming>
+      <incoming>Flow_RejectionFix</incoming>
+      <outgoing>Flow_4</outgoing>
+    </userTask>
 
-    <sequenceFlow id="flowVerifyYes"
-                  sourceRef="gatewayVerification"
-                  targetRef="finalizeRequest">
-      <conditionExpression xsi:type="tFormalExpression">
-        ${verified == true}
-      </conditionExpression>
+    <sequenceFlow id="Flow_4" sourceRef="Activity_PO_Approval" targetRef="Gateway_Approved" />
+
+    <exclusiveGateway id="Gateway_Approved" name="Approved?">
+      <incoming>Flow_4</incoming>
+      <outgoing>Flow_Yes_Approved</outgoing>
+      <outgoing>Flow_No_Approved</outgoing>
+    </exclusiveGateway>
+
+    <sequenceFlow id="Flow_No_Approved" name="No" sourceRef="Gateway_Approved" targetRef="Activity_PM_Fix">
+      <conditionExpression xsi:type="tFormalExpression">${approved == false}</conditionExpression>
     </sequenceFlow>
 
-    <sequenceFlow id="flowVerifyNo"
-                  sourceRef="gatewayVerification"
-                  targetRef="rejectUpdate">
-      <conditionExpression xsi:type="tFormalExpression">
-        ${verified == false}
-      </conditionExpression>
+    <userTask id="Activity_PM_Fix" name="${title} (Fix Rejection)" camunda:assignee="pm_user">
+      <incoming>Flow_No_Approved</incoming>
+      <outgoing>Flow_RejectionFix</outgoing>
+    </userTask>
+
+    <sequenceFlow id="Flow_RejectionFix" sourceRef="Activity_PM_Fix" targetRef="Activity_PO_Approval" />
+
+    <sequenceFlow id="Flow_Yes_Approved" name="Yes" sourceRef="Gateway_Approved" targetRef="Activity_Publish">
+      <conditionExpression xsi:type="tFormalExpression">${approved == true}</conditionExpression>
     </sequenceFlow>
 
-    <!-- Rejection loop -->
-    <sequenceFlow id="fRejectLoop"
-                  sourceRef="rejectUpdate"
-                  targetRef="reviewRequest" />
+    <serviceTask id="Activity_Publish" name="Publish to Providers" camunda:delegateExpression="${publishToProvidersDelegate}">
+      <outgoing>Flow_5</outgoing>
+    </serviceTask>
 
-    <sequenceFlow id="fResubmit"
-                  sourceRef="reviewRequest"
-                  targetRef="procurementApproval" />
+    <sequenceFlow id="Flow_5" sourceRef="Activity_Publish" targetRef="Activity_PM_Evaluate" />
 
-    <!-- Final -->
-    <sequenceFlow id="f9"
-                  sourceRef="finalizeRequest"
-                  targetRef="notifyProvider" />
+    <userTask id="Activity_PM_Evaluate" name="${title}" camunda:assignee="pm_user">
+      <incoming>Flow_5</incoming>
+      <incoming>Flow_Contract_Rejected</incoming> <outgoing>Flow_6</outgoing>
+    </userTask>
 
-    <sequenceFlow id="f10"
-                  sourceRef="notifyProvider"
-                  targetRef="endEvent" />
+    <sequenceFlow id="Flow_6" sourceRef="Activity_PM_Evaluate" targetRef="Activity_PO_Validate" />
+
+    <userTask id="Activity_PO_Validate" name="${title}" camunda:assignee="po_user">
+      <incoming>Flow_6</incoming>
+      <outgoing>Flow_7</outgoing>
+    </userTask>
+
+    <sequenceFlow id="Flow_7" sourceRef="Activity_PO_Validate" targetRef="Gateway_ContractVerified" />
+
+    <exclusiveGateway id="Gateway_ContractVerified" name="Contract Valid?">
+      <incoming>Flow_7</incoming>
+      <outgoing>Flow_Contract_OK</outgoing>
+      <outgoing>Flow_Contract_Rejected</outgoing>
+    </exclusiveGateway>
+
+    <sequenceFlow id="Flow_Contract_Rejected" name="No" sourceRef="Gateway_ContractVerified" targetRef="Activity_PM_Evaluate">
+      <conditionExpression xsi:type="tFormalExpression">${verified == false}</conditionExpression>
+    </sequenceFlow>
+
+    <sequenceFlow id="Flow_Contract_OK" name="Yes" sourceRef="Gateway_ContractVerified" targetRef="Activity_RP_Coordination">
+      <conditionExpression xsi:type="tFormalExpression">${verified == true}</conditionExpression>
+    </sequenceFlow>
+
+    <userTask id="Activity_RP_Coordination" name="${title}" camunda:assignee="rp_user">
+      <incoming>Flow_Contract_OK</incoming>
+      <outgoing>Flow_8</outgoing>
+    </userTask>
+
+    <sequenceFlow id="Flow_8" sourceRef="Activity_RP_Coordination" targetRef="Activity_CreateOrder" />
+
+    <serviceTask id="Activity_CreateOrder" name="Create Service Order" camunda:delegateExpression="${createServiceOrderDelegate}">
+      <outgoing>Flow_9</outgoing>
+    </serviceTask>
+
+    <sequenceFlow id="Flow_9" sourceRef="Activity_CreateOrder" targetRef="Activity_Notify" />
+
+    <serviceTask id="Activity_Notify" name="Notify Provider" camunda:delegateExpression="${notifyProviderDelegate}">
+      <outgoing>Flow_NotifyWorkforce</outgoing>
+    </serviceTask>
+
+    <sequenceFlow id="Flow_NotifyWorkforce" sourceRef="Activity_Notify" targetRef="Activity_NotifyWorkforce" />
+
+    <serviceTask id="Activity_NotifyWorkforce" name="Update Workforce System" camunda:delegateExpression="${notifyWorkforceDelegate}">
+      <outgoing>Flow_End</outgoing>
+    </serviceTask>
+
+    <sequenceFlow id="Flow_End" sourceRef="Activity_NotifyWorkforce" targetRef="EndEvent_Success" />
+
+    <endEvent id="EndEvent_Success" name="Service Order Active" />
 
   </process>
-
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1"
-                      bpmnElement="service-request-process"/>
-  </bpmndi:BPMNDiagram>
-
 </definitions>

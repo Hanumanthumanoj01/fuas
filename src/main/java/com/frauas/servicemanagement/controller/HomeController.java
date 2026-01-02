@@ -31,17 +31,17 @@ public class HomeController {
         return "redirect:/dashboard";
     }
 
-    // CRITICAL FIX: This method now handles both role routing AND data loading.
     @GetMapping("/dashboard")
     public String dashboard(Model model, Authentication auth) {
-        // This is the role-based routing logic (Test 2)
         if (auth != null) {
             if (auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_PM"))) {
                 return "redirect:/service-requests";
             } else if (auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_PO"))) {
-                return "redirect:/camunda/tasks/procurement_officer";
+                // ✅ FIXED
+                return "redirect:/camunda/tasks/po_user";
             } else if (auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_RP"))) {
-                return "redirect:/camunda/tasks/resource_planner";
+                // ✅ FIXED
+                return "redirect:/camunda/tasks/rp_user";
             }
         }
 

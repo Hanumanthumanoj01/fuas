@@ -51,7 +51,7 @@ public class SecurityConfig {
                                 // -------------------------------------------------
                                 .requestMatchers("/camunda/tasks/procurement_officer").hasRole("PO")
                                 .requestMatchers(HttpMethod.POST, "/camunda/task/*/complete")
-                                .hasAnyRole("PO", "RP")
+                                .hasAnyRole("PO", "RP", "PM")
 
                                 // -------------------------------------------------
                                 // RESOURCE PLANNER (RP)
@@ -118,10 +118,13 @@ public class SecurityConfig {
             var authorities = authentication.getAuthorities();
             String redirectUrl = "/service-requests"; // PM default
 
+            // ✅ FIXED: Redirect to 'po_user' instead of 'procurement_officer'
             if (authorities.stream().anyMatch(a -> a.getAuthority().equals("ROLE_PO"))) {
-                redirectUrl = "/camunda/tasks/procurement_officer";
-            } else if (authorities.stream().anyMatch(a -> a.getAuthority().equals("ROLE_RP"))) {
-                redirectUrl = "/camunda/tasks/resource_planner";
+                redirectUrl = "/camunda/tasks/po_user";
+            }
+            // ✅ FIXED: Redirect to 'rp_user' instead of 'resource_planner'
+            else if (authorities.stream().anyMatch(a -> a.getAuthority().equals("ROLE_RP"))) {
+                redirectUrl = "/camunda/tasks/rp_user";
             }
 
             response.sendRedirect(redirectUrl);

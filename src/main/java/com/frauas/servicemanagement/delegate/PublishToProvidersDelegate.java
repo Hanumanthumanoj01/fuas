@@ -5,6 +5,7 @@ import com.frauas.servicemanagement.entity.ServiceRequest;
 import com.frauas.servicemanagement.entity.ServiceRequestStatus;
 import com.frauas.servicemanagement.repository.ProviderOfferRepository;
 import com.frauas.servicemanagement.service.EmailService;
+import com.frauas.servicemanagement.service.ProviderOfferService;
 import com.frauas.servicemanagement.service.ServiceRequestService;
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.JavaDelegate;
@@ -19,12 +20,13 @@ public class PublishToProvidersDelegate implements JavaDelegate {
 
     @Autowired private ServiceRequestService serviceRequestService;
     @Autowired private ProviderOfferRepository providerOfferRepository;
+    @Autowired private ProviderOfferService providerOfferService;
     @Autowired private EmailService emailService;
 
     @Override
     public void execute(DelegateExecution execution) throws Exception {
         Long requestId = (Long) execution.getVariable("requestId");
-        System.out.println(">>> SYSTEM: Publishing Request ID: " + requestId + " to External Providers...");
+        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 4: Publishing Request ID " + requestId);
 
         Optional<ServiceRequest> requestOpt = serviceRequestService.getServiceRequestById(requestId);
 
@@ -34,29 +36,45 @@ public class PublishToProvidersDelegate implements JavaDelegate {
             // 1. Update Status
             serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.PUBLISHED);
 
-            // 2. SIMULATE EXTERNAL RESPONSE (INTERNAL LOGIC for Speed)
             try {
-                // Offer 1
-                ProviderOffer o1 = new ProviderOffer(request, "Global Tech Solutions", 120.00, "Senior Java Dev", 10);
+                System.out.println(">>> [API IN] GROUP 4 -> GROUP 3B: Receiving Mock Offers...");
+
+                // ✅ MOCK OFFER 1 (Based on Group 4b Excel)
+                ProviderOffer o1 = new ProviderOffer();
+                o1.setServiceRequest(request);
+                o1.setProviderName("Check24");
+                o1.setServiceType("Low Wage");
+                o1.setSpecialistName("Test1");
+                o1.setDailyRate(100.00);
+                o1.setOnsiteDays(8);
+                o1.setTravelCost(80.00);
+                o1.setTotalCost(1280.00);
+                o1.setContractType("Working student");
+                o1.setSkills("Python, German");
                 o1.setSubmittedAt(LocalDateTime.now());
                 providerOfferRepository.save(o1);
 
-                // Offer 2
-                ProviderOffer o2 = new ProviderOffer(request, "Cloud Innovators GmbH", 95.50, "AWS Expert", 15);
+                // ✅ MOCK OFFER 2
+                ProviderOffer o2 = new ProviderOffer();
+                o2.setServiceRequest(request);
+                o2.setProviderName("Siemens");
+                o2.setServiceType("Expert");
+                o2.setSpecialistName("Test2");
+                o2.setDailyRate(200.00);
+                o2.setOnsiteDays(20);
+                o2.setTravelCost(400.00);
+                o2.setTotalCost(4400.00);
+                o2.setContractType("Employee");
+                o2.setSkills("5 years experience");
                 o2.setSubmittedAt(LocalDateTime.now());
                 providerOfferRepository.save(o2);
 
-                System.out.println(">>> INTEGRATION SUCCESS: 2 Provider Offers received via API.");
+                // Calculate Scores
+                providerOfferService.calculateRanking(requestId);
 
-                // 3. Update Status
+                // Update Status & Notify
                 serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.OFFERS_RECEIVED);
-
-                // 4. Send Email
-                emailService.sendNotification(
-                        "rp_user",
-                        "ACTION REQUIRED: Offers Received for Request " + requestId,
-                        "External offers have been received and are ready for evaluation."
-                );
+                emailService.sendNotification("rp_user", "Offers Received", "Check Dashboard.");
 
             } catch (Exception e) {
                 System.err.println("!!! INTEGRATION ERROR: " + e.getMessage());

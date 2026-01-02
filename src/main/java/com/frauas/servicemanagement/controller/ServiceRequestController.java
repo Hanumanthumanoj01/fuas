@@ -2,14 +2,16 @@ package com.frauas.servicemanagement.controller;
 
 import com.frauas.servicemanagement.entity.ServiceRequest;
 import com.frauas.servicemanagement.entity.ServiceRequestStatus;
+import com.frauas.servicemanagement.service.CamundaProcessService;
 import com.frauas.servicemanagement.service.ServiceRequestService;
+
+import org.camunda.bpm.engine.task.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @Controller
 @RequestMapping("/service-requests")
@@ -18,80 +20,133 @@ public class ServiceRequestController {
     @Autowired
     private ServiceRequestService serviceRequestService;
 
-    // -----------------------
-    // Page endpoints (Thymeleaf)
-    // -----------------------
+    @Autowired
+    private CamundaProcessService camundaProcessService;
 
+    // =====================================================
+    // ✅ PROFESSIONAL PM DASHBOARD (SINGLE ENTRY POINT)
+    // =====================================================
     @GetMapping
-    public String getAllServiceRequests(Model model) {
-        List<ServiceRequest> requests = serviceRequestService.getAllServiceRequests();
-        model.addAttribute("serviceRequests", requests);
+    public String getPMDashboard(Model model) {
+
+        // -------------------------------------------------
+        // 1. DATABASE RECORDS (FULL HISTORY)
+        // -------------------------------------------------
+        List<ServiceRequest> allRequests =
+                serviceRequestService.getAllServiceRequests();
+
+        model.addAttribute("serviceRequests", allRequests);
         model.addAttribute("newRequest", new ServiceRequest());
-        return "service-requests";
+
+        // -------------------------------------------------
+        // 2. ACTIVE CAMUNDA TASKS (ACTION ITEMS)
+        // -------------------------------------------------
+        List<Task> pmTasks =
+                camundaProcessService.getTasksForAssignee("pm_user");
+
+        model.addAttribute("activeTasks", pmTasks);
+
+        // -------------------------------------------------
+        // 3. KPI CARDS
+        // -------------------------------------------------
+        long draftCount = allRequests.stream()
+                .filter(r -> r.getStatus() == ServiceRequestStatus.DRAFT)
+                .count();
+
+        long activeCount = allRequests.stream()
+                .filter(r ->
+                        r.getStatus() != ServiceRequestStatus.DRAFT &&
+                                r.getStatus() != ServiceRequestStatus.COMPLETED)
+                .count();
+
+        long completedCount = allRequests.stream()
+                .filter(r -> r.getStatus() == ServiceRequestStatus.COMPLETED)
+                .count();
+
+        model.addAttribute("draftCount", draftCount);
+        model.addAttribute("activeCount", activeCount);
+        model.addAttribute("completedCount", completedCount);
+
+        // -------------------------------------------------
+        // 4. SINGLE DASHBOARD VIEW
+        // -------------------------------------------------
+        return "service-requests"; // Will be rewritten as PM Dashboard
     }
 
-    /**
-     * Creates a new ServiceRequest and immediately starts the Camunda workflow.
-     */
+    // =====================================================
+    // CREATE SERVICE REQUEST (DRAFT ONLY)
+    // =====================================================
     @PostMapping
-    public String createServiceRequest(@ModelAttribute ServiceRequest serviceRequest) {
-        serviceRequestService.createServiceRequestWithProcess(serviceRequest);
+    public String createServiceRequest(
+            @ModelAttribute ServiceRequest serviceRequest) {
+
+        serviceRequestService.createServiceRequest(serviceRequest);
         return "redirect:/service-requests";
     }
 
-    /**
-     * Manually start the Camunda process for a ServiceRequest that is currently in DRAFT status.
-     */
+    // =====================================================
+    // START CAMUNDA PROCESS EXPLICITLY
+    // =====================================================
     @PostMapping("/{id}/process")
     public String startProcessForDraft(@PathVariable Long id) {
-        Optional<ServiceRequest> maybe = serviceRequestService.getServiceRequestById(id);
-        if (maybe.isPresent()) {
-            ServiceRequest request = maybe.get();
-            if (request.getStatus() == ServiceRequestStatus.DRAFT) {
-                serviceRequestService.createServiceRequestWithProcess(request);
-            }
-        }
+
+        serviceRequestService.startProcessForRequest(id);
         return "redirect:/service-requests";
     }
 
-    /**
-     * Update the status of a service request (form posts enum name).
-     */
+    // =====================================================
+    // MANUAL STATUS UPDATE (ADMIN / DEBUG)
+    // =====================================================
     @PostMapping("/{id}/status")
-    public String updateStatus(@PathVariable Long id, @RequestParam ServiceRequestStatus status) {
+    public String updateStatus(
+            @PathVariable Long id,
+            @RequestParam ServiceRequestStatus status) {
+
         serviceRequestService.updateServiceRequestStatus(id, status);
         return "redirect:/service-requests";
     }
 
+    // =====================================================
+    // REQUEST DETAILS PAGE
+    // =====================================================
     @GetMapping("/{id}")
-    public String getServiceRequestDetails(@PathVariable Long id, Model model) {
-        ServiceRequest request = serviceRequestService.getServiceRequestById(id).orElse(null);
+    public String getServiceRequestDetails(
+            @PathVariable Long id,
+            Model model) {
+
+        ServiceRequest request =
+                serviceRequestService.getServiceRequestById(id).orElse(null);
+
         model.addAttribute("serviceRequest", request);
         return "service-request-details";
     }
 
-    /**
-     * Delete a service request (simple demo endpoint).
-     */
+    // =====================================================
+    // DELETE REQUEST
+    // =====================================================
     @PostMapping("/{id}/delete")
     public String deleteRequest(@PathVariable Long id) {
+
         serviceRequestService.deleteServiceRequest(id);
         return "redirect:/service-requests";
     }
 
-    // -----------------------
-    // Lightweight REST endpoints (for other services/consumers)
-    // -----------------------
-
+    // =====================================================
+    // LIGHTWEIGHT REST APIs (OPTIONAL)
+    // =====================================================
     @GetMapping("/api")
     @ResponseBody
     public List<ServiceRequest> getAllServiceRequestsApi() {
+
         return serviceRequestService.getAllServiceRequests();
     }
 
     @GetMapping("/api/{id}")
     @ResponseBody
     public ServiceRequest getServiceRequestApi(@PathVariable Long id) {
-        return serviceRequestService.getServiceRequestById(id).orElse(null);
+
+        return serviceRequestService
+                .getServiceRequestById(id)
+                .orElse(null);
     }
 }
