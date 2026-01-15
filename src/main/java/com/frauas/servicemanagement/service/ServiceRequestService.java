@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -44,49 +46,40 @@ public class ServiceRequestService {
     }
 
     /* =====================================================
-       PHASE 0 — PURE DATA ENTRY (DRAFT)
+       PHASE 0 — DRAFT CREATION (NO CONTRACT ID!)
        ===================================================== */
 
     /**
      * Creates a ServiceRequest in DRAFT state.
-     * ❗ Does NOT start Camunda.
-     * This represents simple data entry by the PM.
+     * ❗ Contract ID MUST remain NULL.
+     * It will be created ONLY after 2B validation.
      */
     public ServiceRequest createServiceRequest(ServiceRequest serviceRequest) {
 
         serviceRequest.setStatus(ServiceRequestStatus.DRAFT);
 
-        // Mocked external dependencies (as per project constraints)
-        serviceRequest.setInternalRequestId(
-                1000L + (long) (Math.random() * 1000)
-        );
-        serviceRequest.setContractId(
-                2000L + (long) (Math.random() * 1000)
-        );
+        // Mock external Workforce ID (allowed at draft stage)
+        if (serviceRequest.getInternalRequestId() == null) {
+            serviceRequest.setInternalRequestId(
+                    1000L + (long) (Math.random() * 1000)
+            );
+        }
+
+        // ❌ DO NOT SET CONTRACT ID HERE
+        // serviceRequest.setContractId(null);
 
         return serviceRequestRepository.save(serviceRequest);
     }
 
     /* =====================================================
-       PHASE 1 — SUBMIT (START BPMN PROCESS)
+       PHASE 1 — START CAMUNDA PROCESS
        ===================================================== */
 
-    /**
-     * Starts the Camunda process for an existing ServiceRequest.
-     * This method is called ONLY when PM clicks "Submit".
-     */
     public void startProcessForRequest(Long requestId) {
 
-        Optional<ServiceRequest> optionalRequest =
-                serviceRequestRepository.findById(requestId);
-
-        if (optionalRequest.isEmpty()) {
-            throw new RuntimeException(
-                    "Cannot start process. ServiceRequest not found: " + requestId
-            );
-        }
-
-        ServiceRequest request = optionalRequest.get();
+        ServiceRequest request = serviceRequestRepository.findById(requestId)
+                .orElseThrow(() ->
+                        new RuntimeException("ServiceRequest not found: " + requestId));
 
         if (request.getStatus() != ServiceRequestStatus.DRAFT) {
             throw new IllegalStateException(
@@ -94,21 +87,23 @@ public class ServiceRequestService {
             );
         }
 
-        // Start Camunda workflow
-        String processInstanceId =
-                camundaProcessService.startServiceRequestProcess(
-                        request.getId(),
-                        request.getTitle(),
-                        request.getDescription()
-                );
+        // ✅ Explicit process variables
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("requestId", Long.valueOf(request.getId()));
+        variables.put("title", request.getTitle());
+        variables.put("description", request.getDescription());
+        variables.put("procurementOfficer", "po_user");
+        variables.put("projectManager", "pm_user");
 
-        // Update status to reflect workflow ownership
+        String processInstanceId =
+                camundaProcessService.startServiceRequestProcess(variables);
+
         request.setStatus(ServiceRequestStatus.WAITING_APPROVAL);
         serviceRequestRepository.save(request);
 
         System.out.println(
-                ">>> BPMN PROCESS STARTED | Request ID: " + requestId +
-                        " | Camunda Instance: " + processInstanceId
+                ">>> BPMN STARTED | Request ID=" + requestId +
+                        " | Process Instance=" + processInstanceId
         );
     }
 
@@ -118,8 +113,8 @@ public class ServiceRequestService {
 
     public ServiceRequest updateServiceRequestStatus(
             Long id,
-            ServiceRequestStatus status
-    ) {
+            ServiceRequestStatus status) {
+
         ServiceRequest request = serviceRequestRepository.findById(id)
                 .orElseThrow(() ->
                         new RuntimeException("ServiceRequest not found: " + id));
@@ -129,7 +124,7 @@ public class ServiceRequestService {
     }
 
     /**
-     * Handles formal rejection with reason (audit requirement).
+     * Formal rejection (audit trail).
      */
     public ServiceRequest rejectServiceRequest(Long id, String reason) {
 
@@ -144,13 +139,9 @@ public class ServiceRequestService {
     }
 
     /* =====================================================
-       SAFE DELETION (ADMIN / TEST USE ONLY)
+       SAFE DELETE (ADMIN / TEST)
        ===================================================== */
 
-    /**
-     * Deletes a ServiceRequest safely by removing dependent
-     * ProviderOffers first to avoid FK violations.
-     */
     public void deleteServiceRequest(Long id) {
 
         ServiceRequest request = serviceRequestRepository.findById(id)
@@ -160,7 +151,6 @@ public class ServiceRequestService {
         // Delete children first
         providerOfferRepository.deleteByServiceRequest(request);
 
-        // Delete parent
         serviceRequestRepository.delete(request);
     }
 }

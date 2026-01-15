@@ -24,31 +24,24 @@ public class ServiceRequestController {
     private CamundaProcessService camundaProcessService;
 
     // =====================================================
-    // ✅ PROFESSIONAL PM DASHBOARD (SINGLE ENTRY POINT)
+    // PM DASHBOARD (SINGLE ENTRY POINT)
     // =====================================================
     @GetMapping
     public String getPMDashboard(Model model) {
 
-        // -------------------------------------------------
         // 1. DATABASE RECORDS (FULL HISTORY)
-        // -------------------------------------------------
         List<ServiceRequest> allRequests =
                 serviceRequestService.getAllServiceRequests();
 
         model.addAttribute("serviceRequests", allRequests);
         model.addAttribute("newRequest", new ServiceRequest());
 
-        // -------------------------------------------------
         // 2. ACTIVE CAMUNDA TASKS (ACTION ITEMS)
-        // -------------------------------------------------
         List<Task> pmTasks =
                 camundaProcessService.getTasksForAssignee("pm_user");
-
         model.addAttribute("activeTasks", pmTasks);
 
-        // -------------------------------------------------
-        // 3. KPI CARDS
-        // -------------------------------------------------
+        // 3. KPI COUNTERS
         long draftCount = allRequests.stream()
                 .filter(r -> r.getStatus() == ServiceRequestStatus.DRAFT)
                 .count();
@@ -67,14 +60,11 @@ public class ServiceRequestController {
         model.addAttribute("activeCount", activeCount);
         model.addAttribute("completedCount", completedCount);
 
-        // -------------------------------------------------
-        // 4. SINGLE DASHBOARD VIEW
-        // -------------------------------------------------
-        return "service-requests"; // Will be rewritten as PM Dashboard
+        return "service-requests";
     }
 
     // =====================================================
-    // CREATE SERVICE REQUEST (DRAFT ONLY)
+    // CREATE SERVICE REQUEST (DRAFT)
     // =====================================================
     @PostMapping
     public String createServiceRequest(
@@ -85,12 +75,65 @@ public class ServiceRequestController {
     }
 
     // =====================================================
-    // START CAMUNDA PROCESS EXPLICITLY
+    // START CAMUNDA PROCESS (ONLY AFTER FINAL CHECK)
     // =====================================================
     @PostMapping("/{id}/process")
     public String startProcessForDraft(@PathVariable Long id) {
 
         serviceRequestService.startProcessForRequest(id);
+        return "redirect:/service-requests";
+    }
+
+    // =====================================================
+    // EDIT SERVICE REQUEST (DRAFT ONLY)
+    // =====================================================
+    @GetMapping("/{id}/edit")
+    public String editRequest(
+            @PathVariable Long id,
+            Model model) {
+
+        ServiceRequest req =
+                serviceRequestService.getServiceRequestById(id).orElse(null);
+
+        // SECURITY: Only editable in DRAFT
+        if (req == null || req.getStatus() != ServiceRequestStatus.DRAFT) {
+            return "redirect:/service-requests";
+        }
+
+        model.addAttribute("serviceRequest", req);
+        return "service-request-edit";
+    }
+
+    // =====================================================
+    // SAVE EDITS (DRAFT ONLY)
+    // =====================================================
+    @PostMapping("/{id}/update")
+    public String updateRequest(
+            @PathVariable Long id,
+            @ModelAttribute ServiceRequest formReq) {
+
+        ServiceRequest existing =
+                serviceRequestService.getServiceRequestById(id).orElse(null);
+
+        if (existing == null || existing.getStatus() != ServiceRequestStatus.DRAFT) {
+            return "redirect:/service-requests";
+        }
+
+        // Allowed PM edits before process start
+        existing.setTitle(formReq.getTitle());
+        existing.setDescription(formReq.getDescription());
+        existing.setInternalProjectName(formReq.getInternalProjectName());
+        existing.setInternalProjectId(formReq.getInternalProjectId());
+        existing.setPerformanceLocation(formReq.getPerformanceLocation());
+        existing.setRequiredSkills(formReq.getRequiredSkills());
+        existing.setMinExperience(formReq.getMinExperience());
+        existing.setHoursPerWeek(formReq.getHoursPerWeek());
+        existing.setHourlyRate(formReq.getHourlyRate());
+        existing.setStartDate(formReq.getStartDate());
+        existing.setEndDate(formReq.getEndDate());
+        existing.setProjectContext(formReq.getProjectContext());
+
+        serviceRequestService.createServiceRequest(existing);
         return "redirect:/service-requests";
     }
 
@@ -122,12 +165,18 @@ public class ServiceRequestController {
     }
 
     // =====================================================
-    // DELETE REQUEST
+    // DELETE REQUEST (DRAFT ONLY)
     // =====================================================
     @PostMapping("/{id}/delete")
     public String deleteRequest(@PathVariable Long id) {
 
-        serviceRequestService.deleteServiceRequest(id);
+        ServiceRequest req =
+                serviceRequestService.getServiceRequestById(id).orElse(null);
+
+        if (req != null && req.getStatus() == ServiceRequestStatus.DRAFT) {
+            serviceRequestService.deleteServiceRequest(id);
+        }
+
         return "redirect:/service-requests";
     }
 
@@ -137,14 +186,12 @@ public class ServiceRequestController {
     @GetMapping("/api")
     @ResponseBody
     public List<ServiceRequest> getAllServiceRequestsApi() {
-
         return serviceRequestService.getAllServiceRequests();
     }
 
     @GetMapping("/api/{id}")
     @ResponseBody
     public ServiceRequest getServiceRequestApi(@PathVariable Long id) {
-
         return serviceRequestService
                 .getServiceRequestById(id)
                 .orElse(null);

@@ -1,97 +1,213 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.6.0">
-  <process id="service-request-process" name="External Service Procurement" isExecutable="true" camunda:historyTimeToLive="P180D">
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             id="Definitions_1"
+             targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <process id="service-request-process"
+           name="External Service Procurement"
+           isExecutable="true"
+           camunda:historyTimeToLive="P180D">
+
+    <!-- START -->
     <startEvent id="StartEvent_1" name="Request Received (1b)">
       <outgoing>Flow_1</outgoing>
     </startEvent>
-    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_CheckContract" />
-    <serviceTask id="Activity_CheckContract" name="Validate Contract" camunda:delegateExpression="${checkContractDelegate}">
+
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_CheckContract"/>
+
+    <!-- CONTRACT CHECK -->
+    <serviceTask id="Activity_CheckContract"
+                 name="Validate Contract"
+                 camunda:delegateExpression="${checkContractDelegate}">
       <outgoing>Flow_To_PO</outgoing>
     </serviceTask>
-    <sequenceFlow id="Flow_To_PO" sourceRef="Activity_CheckContract" targetRef="Activity_PO_Approval" />
-    <userTask id="Activity_PO_Approval" name="Approve Request (PO)" camunda:assignee="po_user">
+
+    <sequenceFlow id="Flow_To_PO" sourceRef="Activity_CheckContract" targetRef="Activity_PO_Approval"/>
+
+    <!-- PO APPROVAL -->
+    <userTask id="Activity_PO_Approval"
+              name="Approve Request (PO)"
+              camunda:assignee="po_user">
       <incoming>Flow_To_PO</incoming>
       <incoming>Flow_RejectionFix</incoming>
       <outgoing>Flow_4</outgoing>
     </userTask>
-    <sequenceFlow id="Flow_4" sourceRef="Activity_PO_Approval" targetRef="Gateway_Approved" />
-    <exclusiveGateway id="Gateway_Approved" name="Approved?">
-      <incoming>Flow_4</incoming>
-      <outgoing>Flow_Yes_Approved</outgoing>
-      <outgoing>Flow_No_Approved</outgoing>
-    </exclusiveGateway>
-    <sequenceFlow id="Flow_No_Approved" name="No" sourceRef="Gateway_Approved" targetRef="Activity_PM_Fix">
+
+    <sequenceFlow id="Flow_4" sourceRef="Activity_PO_Approval" targetRef="Gateway_Approved"/>
+
+    <exclusiveGateway id="Gateway_Approved" name="Approved?"/>
+
+    <sequenceFlow id="Flow_No_Approved"
+                  sourceRef="Gateway_Approved"
+                  targetRef="Activity_PM_Fix">
       <conditionExpression xsi:type="tFormalExpression">${approved == false}</conditionExpression>
     </sequenceFlow>
-    <userTask id="Activity_PM_Fix" name="Fix Request (PM)" camunda:assignee="pm_user">
-      <incoming>Flow_No_Approved</incoming>
-      <outgoing>Flow_RejectionFix</outgoing>
-    </userTask>
-    <sequenceFlow id="Flow_RejectionFix" sourceRef="Activity_PM_Fix" targetRef="Activity_PO_Approval" />
-    <sequenceFlow id="Flow_Yes_Approved" name="Yes" sourceRef="Gateway_Approved" targetRef="Activity_Publish">
+
+    <sequenceFlow id="Flow_Yes_Approved"
+                  sourceRef="Gateway_Approved"
+                  targetRef="Activity_Publish">
       <conditionExpression xsi:type="tFormalExpression">${approved == true}</conditionExpression>
     </sequenceFlow>
-    <serviceTask id="Activity_Publish" name="Publish to Providers" camunda:delegateExpression="${publishToProvidersDelegate}">
+
+    <!-- PM FIX -->
+    <userTask id="Activity_PM_Fix"
+              name="Fix Request (PM)"
+              camunda:assignee="pm_user">
+      <outgoing>Flow_RejectionFix</outgoing>
+    </userTask>
+
+    <sequenceFlow id="Flow_RejectionFix"
+                  sourceRef="Activity_PM_Fix"
+                  targetRef="Activity_PO_Approval"/>
+
+    <!-- PUBLISH -->
+    <serviceTask id="Activity_Publish"
+                 name="Publish to Providers"
+                 camunda:delegateExpression="${publishToProvidersDelegate}">
       <outgoing>Flow_5</outgoing>
     </serviceTask>
-    <sequenceFlow id="Flow_5" sourceRef="Activity_Publish" targetRef="Activity_PM_Evaluate" />
-    <userTask id="Activity_PM_Evaluate" name="Evaluate Offers (PM)" camunda:assignee="pm_user">
-      <incoming>Flow_5</incoming>
-      <outgoing>Flow_6</outgoing>
+
+    <sequenceFlow id="Flow_5" sourceRef="Activity_Publish" targetRef="Activity_PM_Evaluate"/>
+
+    <!-- PM EVALUATE -->
+    <userTask id="Activity_PM_Evaluate"
+              name="Evaluate Offers (PM)"
+              camunda:assignee="pm_user">
+      <outgoing>Flow_To_PO_Validate</outgoing>
     </userTask>
-    <sequenceFlow id="Flow_6" sourceRef="Activity_PM_Evaluate" targetRef="Activity_Notify_1b" />
-    <serviceTask id="Activity_Notify_1b" name="Send Recommendation to 1b" camunda:delegateExpression="${notify1bRecommendationDelegate}">
+
+    <sequenceFlow id="Flow_To_PO_Validate"
+                  sourceRef="Activity_PM_Evaluate"
+                  targetRef="Activity_PO_Validate"/>
+
+    <!-- PO VALIDATE -->
+    <userTask id="Activity_PO_Validate"
+              name="Validate Selection (PO)"
+              camunda:assignee="po_user">
+      <outgoing>Flow_Gateway_Selection</outgoing>
+    </userTask>
+
+    <sequenceFlow id="Flow_Gateway_Selection"
+                  sourceRef="Activity_PO_Validate"
+                  targetRef="Gateway_Selection_Approved"/>
+
+    <exclusiveGateway id="Gateway_Selection_Approved"
+                      name="Selection Valid?"/>
+
+    <sequenceFlow id="Flow_Selection_Reject"
+                  sourceRef="Gateway_Selection_Approved"
+                  targetRef="Activity_PM_Evaluate">
+      <conditionExpression xsi:type="tFormalExpression">${selectionApproved == false}</conditionExpression>
+    </sequenceFlow>
+
+    <sequenceFlow id="Flow_Selection_OK"
+                  sourceRef="Gateway_Selection_Approved"
+                  targetRef="Activity_Notify_1b">
+      <conditionExpression xsi:type="tFormalExpression">${selectionApproved == true}</conditionExpression>
+    </sequenceFlow>
+
+    <!-- SEND TO 1B -->
+    <serviceTask id="Activity_Notify_1b"
+                 name="Send Recommendation to 1b"
+                 camunda:delegateExpression="${notify1bRecommendationDelegate}">
       <outgoing>Flow_Wait_1b</outgoing>
     </serviceTask>
-    <sequenceFlow id="Flow_Wait_1b" sourceRef="Activity_Notify_1b" targetRef="Event_Wait_1b" />
-    <receiveTask id="Event_Wait_1b" name="Wait for 1b Decision" messageRef="Message_1b_Decision">
-      <incoming>Flow_Wait_1b</incoming>
+
+    <sequenceFlow id="Flow_Wait_1b"
+                  sourceRef="Activity_Notify_1b"
+                  targetRef="Event_Wait_1b"/>
+
+    <!-- WAIT FOR 1B -->
+    <receiveTask id="Event_Wait_1b"
+                 name="Wait for 1b Decision"
+                 messageRef="Message_1b_Decision"
+                 camunda:asyncBefore="true">
       <outgoing>Flow_After_Wait</outgoing>
     </receiveTask>
-    <sequenceFlow id="Flow_After_Wait" sourceRef="Event_Wait_1b" targetRef="Gateway_1b_Decision" />
-    <exclusiveGateway id="Gateway_1b_Decision" name="1b Accepted?">
-      <incoming>Flow_After_Wait</incoming>
-      <outgoing>Flow_1b_Yes</outgoing>
-      <outgoing>Flow_1b_No</outgoing>
-    </exclusiveGateway>
 
-    <sequenceFlow id="Flow_1b_No" name="No" sourceRef="Gateway_1b_Decision" targetRef="Activity_Notify_4b_Reject">
-      <conditionExpression xsi:type="tFormalExpression">${oneBDecision == 'REJECTED'}</conditionExpression>
+    <sequenceFlow id="Flow_After_Wait"
+                  sourceRef="Event_Wait_1b"
+                  targetRef="Gateway_1b_Decision"/>
+
+    <!-- 1B DECISION -->
+    <exclusiveGateway id="Gateway_1b_Decision" name="1b Decision?"/>
+
+    <!-- ❌ 1B REJECT -->
+    <sequenceFlow id="Flow_1b_Rejected"
+                  sourceRef="Gateway_1b_Decision"
+                  targetRef="Activity_Notify_4b_Reject">
+      <conditionExpression xsi:type="tFormalExpression">
+        ${oneBDecision == 'REJECTED'}
+      </conditionExpression>
     </sequenceFlow>
-    <serviceTask id="Activity_Notify_4b_Reject" name="Notify 4b (Rejected)" camunda:delegateExpression="${notifyProviderRejectDelegate}">
+
+    <serviceTask id="Activity_Notify_4b_Reject"
+                 name="Notify Provider (Rejected)"
+                 camunda:delegateExpression="${notifyProviderRejectDelegate}">
       <outgoing>Flow_End_Reject</outgoing>
     </serviceTask>
-    <endEvent id="Flow_End_Reject" name="Request Rejected by 1b" />
 
-    <sequenceFlow id="Flow_1b_Yes" name="Yes" sourceRef="Gateway_1b_Decision" targetRef="Activity_RP_Coordination">
-      <conditionExpression xsi:type="tFormalExpression">${oneBDecision == 'ACCEPTED'}</conditionExpression>
+    <endEvent id="Flow_End_Reject" name="Request Rejected by 1b"/>
+
+    <!-- ✅ 1B ACCEPT -->
+    <sequenceFlow id="Flow_1b_Accepted"
+                  sourceRef="Gateway_1b_Decision"
+                  targetRef="Activity_RP_Coordination">
+      <conditionExpression xsi:type="tFormalExpression">
+        ${oneBDecision == 'ACCEPTED'}
+      </conditionExpression>
     </sequenceFlow>
 
-    <userTask id="Activity_RP_Coordination" name="Confirm Logistics (RP)" camunda:assignee="rp_user">
-      <incoming>Flow_1b_Yes</incoming>
+    <!-- RP + ORDER -->
+    <userTask id="Activity_RP_Coordination"
+              name="Confirm Logistics (RP)"
+              camunda:assignee="rp_user">
       <outgoing>Flow_To_CreateOrder</outgoing>
     </userTask>
 
-    <sequenceFlow id="Flow_To_CreateOrder" sourceRef="Activity_RP_Coordination" targetRef="Activity_CreateOrder" />
+    <sequenceFlow id="Flow_To_CreateOrder"
+                  sourceRef="Activity_RP_Coordination"
+                  targetRef="Activity_CreateOrder"/>
 
-    <serviceTask id="Activity_CreateOrder" name="Create Service Order" camunda:delegateExpression="${createServiceOrderDelegate}">
+    <serviceTask id="Activity_CreateOrder"
+                 name="Create Service Order"
+                 camunda:delegateExpression="${createServiceOrderDelegate}">
       <outgoing>Flow_9</outgoing>
     </serviceTask>
 
-    <sequenceFlow id="Flow_9" sourceRef="Activity_CreateOrder" targetRef="Activity_Notify_Win" />
+    <sequenceFlow id="Flow_9"
+                  sourceRef="Activity_CreateOrder"
+                  targetRef="Activity_Notify_Win"/>
 
-    <serviceTask id="Activity_Notify_Win" name="Notify Provider (Win)" camunda:delegateExpression="${notifyProviderDelegate}">
+    <serviceTask id="Activity_Notify_Win"
+                 name="Notify Provider (Win)"
+                 camunda:delegateExpression="${notifyProviderDelegate}">
       <outgoing>Flow_To_Workforce</outgoing>
     </serviceTask>
 
-    <sequenceFlow id="Flow_To_Workforce" sourceRef="Activity_Notify_Win" targetRef="Activity_NotifyWorkforce" />
+    <sequenceFlow id="Flow_To_Workforce"
+                  sourceRef="Activity_Notify_Win"
+                  targetRef="Activity_NotifyWorkforce"/>
 
-    <serviceTask id="Activity_NotifyWorkforce" name="Update Workforce System" camunda:delegateExpression="${notifyWorkforceDelegate}">
+    <serviceTask id="Activity_NotifyWorkforce"
+                 name="Update Workforce System"
+                 camunda:delegateExpression="${notifyWorkforceDelegate}">
       <outgoing>Flow_End</outgoing>
     </serviceTask>
 
-    <sequenceFlow id="Flow_End" sourceRef="Activity_NotifyWorkforce" targetRef="EndEvent_Success" />
-    <endEvent id="EndEvent_Success" name="Service Order Active" />
+    <sequenceFlow id="Flow_End"
+                  sourceRef="Activity_NotifyWorkforce"
+                  targetRef="EndEvent_Success"/>
+
+    <endEvent id="EndEvent_Success" name="Service Order Active"/>
+
   </process>
-  <message id="Message_1b_Decision" name="Message_1b_Decision" />
+
+  <message id="Message_1b_Decision" name="Message_1b_Decision"/>
+
 </definitions>

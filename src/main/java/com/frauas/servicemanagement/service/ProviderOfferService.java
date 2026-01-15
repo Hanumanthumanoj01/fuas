@@ -21,67 +21,12 @@ public class ProviderOfferService {
     @Autowired
     private ServiceRequestRepository serviceRequestRepository;
 
+    // =========================
+    // FETCHING
+    // =========================
     @Transactional(readOnly = true)
     public List<ProviderOffer> getOffersByServiceRequest(Long serviceRequestId) {
         return providerOfferRepository.findByServiceRequestId(serviceRequestId);
-    }
-
-    public ProviderOffer submitOffer(Long serviceRequestId, ProviderOffer offer) {
-        Optional<ServiceRequest> serviceRequest = serviceRequestRepository.findById(serviceRequestId);
-        if (serviceRequest.isPresent()) {
-            offer.setServiceRequest(serviceRequest.get());
-            return providerOfferRepository.save(offer);
-        }
-        return null;
-    }
-
-    /**
-     * THE ALGORITHM (UPDATED):
-     * 1. Updates Technical Score (from User Input)
-     * 2. Auto-calculates Commercial Score based on TOTAL COST (Not just rate)
-     * 3. Calculates Total Weighted Score
-     */
-    public void calculateRanking(Long requestId) {
-        List<ProviderOffer> offers = getOffersByServiceRequest(requestId);
-        if (offers.isEmpty()) return;
-
-        ServiceRequest request = offers.get(0).getServiceRequest();
-
-        // Find Lowest Total Cost
-        double minTotal = offers.stream()
-                .mapToDouble(o -> (o.getTotalCost() != null) ? o.getTotalCost() : 0.0)
-                .filter(c -> c > 0)
-                .min().orElse(1.0);
-
-        for (ProviderOffer offer : offers) {
-            double actualCost = (offer.getTotalCost() != null && offer.getTotalCost() > 0)
-                    ? offer.getTotalCost() : 1.0;
-
-            // Commercial Logic: (LowestCost / ActualCost) * 100
-            double commScore = (minTotal / actualCost) * 100.0;
-            offer.setCommercialScore(Math.round(commScore * 100.0) / 100.0);
-
-            // Total Score Logic
-            double techWeight = request.getTechnicalWeighting() / 100.0;
-            double commWeight = request.getCommercialWeighting() / 100.0;
-
-            double total = (offer.getTechnicalScore() * techWeight) + (commScore * commWeight);
-            offer.setTotalScore(Math.round(total * 100.0) / 100.0);
-
-            providerOfferRepository.save(offer);
-        }
-    }
-
-    // Called when Resource Planner inputs a technical score
-    public void updateTechnicalScore(Long offerId, Double score) {
-        Optional<ProviderOffer> opt = providerOfferRepository.findById(offerId);
-        if(opt.isPresent()) {
-            ProviderOffer offer = opt.get();
-            offer.setTechnicalScore(score);
-            providerOfferRepository.save(offer);
-            // Recalculate rankings for this request
-            calculateRanking(offer.getServiceRequest().getId());
-        }
     }
 
     @Transactional(readOnly = true)
@@ -89,7 +34,124 @@ public class ProviderOfferService {
         return providerOfferRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
     public Optional<ProviderOffer> getOfferById(Long id) {
         return providerOfferRepository.findById(id);
+    }
+
+    // =========================
+    // SUBMIT OFFER
+    // =========================
+    public ProviderOffer submitOffer(Long serviceRequestId, ProviderOffer offer) {
+
+        Optional<ServiceRequest> serviceRequestOpt =
+                serviceRequestRepository.findById(serviceRequestId);
+
+        if (serviceRequestOpt.isEmpty()) {
+            return null;
+        }
+
+        offer.setServiceRequest(serviceRequestOpt.get());
+        return providerOfferRepository.save(offer);
+    }
+
+    // =========================
+    // RANKING & SCORING LOGIC
+    // =========================
+    /**
+     * SCORING MODEL:
+     * - Commercial Score = (lowestTotalCost / offerTotalCost) * 100
+     * - Technical Score  = entered by RP (0–100)
+     * - Total Score      = weighted sum
+     */
+    public void calculateRanking(Long requestId) {
+
+        List<ProviderOffer> offers = getOffersByServiceRequest(requestId);
+        if (offers == null || offers.isEmpty()) {
+            return;
+        }
+
+        ServiceRequest request = offers.get(0).getServiceRequest();
+
+        // -------------------------
+        // ✅ FIX: FORCE DOUBLE DIVISION
+        // -------------------------
+        double techWeight =
+                (request.getTechnicalWeighting() != null
+                        ? request.getTechnicalWeighting()
+                        : 50) / 100.0;
+
+        double commWeight =
+                (request.getCommercialWeighting() != null
+                        ? request.getCommercialWeighting()
+                        : 50) / 100.0;
+
+        // -------------------------
+        // FIND LOWEST TOTAL COST
+        // -------------------------
+        double minTotalCost = offers.stream()
+                .map(ProviderOffer::getTotalCost)
+                .filter(c -> c != null && c > 0)
+                .min(Double::compareTo)
+                .orElse(1.0); // hard safety
+
+        // -------------------------
+        // CALCULATE SCORES
+        // -------------------------
+        for (ProviderOffer offer : offers) {
+
+            double actualCost =
+                    (offer.getTotalCost() != null && offer.getTotalCost() > 0)
+                            ? offer.getTotalCost()
+                            : minTotalCost;
+
+            // ✅ COMMERCIAL SCORE (0–100)
+            double commercialScore =
+                    (minTotalCost / actualCost) * 100.0;
+
+            commercialScore =
+                    Math.round(commercialScore * 100.0) / 100.0;
+
+            offer.setCommercialScore(commercialScore);
+
+            // TECH SCORE (safe default)
+            double technicalScore =
+                    offer.getTechnicalScore() != null
+                            ? offer.getTechnicalScore()
+                            : 0.0;
+
+            // FINAL SCORE
+            double totalScore =
+                    (technicalScore * techWeight) +
+                            (commercialScore * commWeight);
+
+            totalScore =
+                    Math.round(totalScore * 100.0) / 100.0;
+
+            offer.setTotalScore(totalScore);
+
+            providerOfferRepository.save(offer);
+        }
+    }
+
+    // =========================
+    // UPDATE TECHNICAL SCORE
+    // =========================
+    public void updateTechnicalScore(Long offerId, Double score) {
+
+        Optional<ProviderOffer> opt =
+                providerOfferRepository.findById(offerId);
+
+        if (opt.isEmpty()) {
+            return;
+        }
+
+        ProviderOffer offer = opt.get();
+        offer.setTechnicalScore(score);
+        providerOfferRepository.save(offer);
+
+        if (offer.getServiceRequest() != null) {
+            calculateRanking(offer.getServiceRequest().getId());
+        }
     }
 }

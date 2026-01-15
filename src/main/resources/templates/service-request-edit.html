@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Edit Request Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light p-5">
+
+<div class="container bg-white p-4 rounded shadow">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>Edit Request (From Group 1b)</h3>
+        <span class="badge bg-secondary">DRAFT</span>
+    </div>
+
+    <form th:action="@{/service-requests/{id}/update(id=${serviceRequest.id})}"
+          th:object="${serviceRequest}"
+          method="post">
+
+        <!-- =========================
+             REFERENCE INFO (READ ONLY)
+             ========================= -->
+        <h6 class="text-muted border-bottom pb-2">Reference Info (Read-Only)</h6>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Internal Request ID</label>
+                <input type="text" class="form-control bg-light"
+                       th:field="*{internalRequestId}" readonly>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Project ID</label>
+                <input type="text" class="form-control bg-light"
+                       th:field="*{internalProjectId}" readonly>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small text-muted">Project Name</label>
+                <input type="text" class="form-control bg-light"
+                       th:field="*{internalProjectName}" readonly>
+            </div>
+        </div>
+
+        <!-- =========================
+             ROLE DETAILS
+             ========================= -->
+        <h6 class="text-muted border-bottom pb-2">Role Details</h6>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Job Title</label>
+                <input type="text" class="form-control"
+                       th:field="*{title}" required>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Project Context</label>
+                <input type="text" class="form-control"
+                       th:field="*{projectContext}">
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" rows="4"
+                          th:field="*{description}"></textarea>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Required Skills (Comma Separated)</label>
+                <textarea class="form-control" rows="2"
+                          th:field="*{requiredSkills}"></textarea>
+            </div>
+        </div>
+
+        <!-- =========================
+             BUDGET & TIMELINE
+             ========================= -->
+        <h6 class="text-muted border-bottom pb-2">Budget & Timeline</h6>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Hourly Rate (€)</label>
+                <input type="number" step="0.01" class="form-control"
+                       th:field="*{hourlyRate}">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Hours / Week</label>
+                <input type="number" class="form-control"
+                       th:field="*{hoursPerWeek}">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Start Date</label>
+                <input type="date" class="form-control"
+                       th:field="*{startDate}">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-bold">End Date</label>
+                <input type="date" class="form-control"
+                       th:field="*{endDate}">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Min Experience (Years)</label>
+                <input type="number" step="0.1" class="form-control"
+                       th:field="*{minExperience}">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Location</label>
+                <input type="text" class="form-control"
+                       th:field="*{performanceLocation}">
+            </div>
+        </div>
+
+        <!-- =========================
+             ORIGINAL 1B PAYLOAD
+             ========================= -->
+        <h6 class="text-muted border-bottom pb-2 mt-4">
+            Original Data (1b)
+        </h6>
+
+        <div class="mb-3">
+            <textarea class="form-control font-monospace small bg-light"
+                      rows="6"
+                      readonly
+                      th:text="${serviceRequest.rawPayload}">
+            </textarea>
+            <small class="text-muted">
+                Raw payload received from 1b. Use this to verify or debug field mapping.
+            </small>
+        </div>
+
+        <!-- =========================
+             ACTIONS
+             ========================= -->
+        <div class="d-flex justify-content-end gap-2">
+            <a href="/service-requests" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-success px-4">
+                Save Changes
+            </button>
+        </div>
+
+    </form>
+</div>
+
+</body>
+</html>

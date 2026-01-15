@@ -1,6 +1,5 @@
 package com.frauas.servicemanagement.controller;
 
-import com.frauas.servicemanagement.entity.ProviderOffer;
 import com.frauas.servicemanagement.entity.ServiceRequestStatus;
 import com.frauas.servicemanagement.service.CamundaProcessService;
 import com.frauas.servicemanagement.service.ProviderOfferService;
@@ -8,8 +7,6 @@ import com.frauas.servicemanagement.service.ServiceRequestService;
 
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.task.Task;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -27,164 +24,235 @@ import java.util.Map;
 @RequestMapping("/camunda")
 public class CamundaController {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CamundaController.class);
-
     @Autowired private CamundaProcessService camundaProcessService;
     @Autowired private ProviderOfferService providerOfferService;
     @Autowired private ServiceRequestService serviceRequestService;
     @Autowired private RuntimeService runtimeService;
 
-    // --- TASK LIST (FIXED NAMING) ---
+    // =====================================================
+    // TASK LIST — HUMAN READABLE NAMES
+    // =====================================================
     @GetMapping("/tasks")
     public String getAllTasks(Model model) {
         return getTasksForAssignee("all", model);
     }
 
-    // --- TASK LIST (FIXED NAMING) ---
     @GetMapping("/tasks/{assignee}")
     public String getTasksForAssignee(@PathVariable String assignee, Model model) {
-        List<Task> tasks = assignee.equals("all") ? camundaProcessService.getAllActiveTasks() : camundaProcessService.getTasksForAssignee(assignee);
 
-        // ✅ NEW: Dynamic Naming (Title - Task Name) for ALL tasks
-        tasks.forEach(t -> {
-            String projectTitle = (String) runtimeService.getVariable(t.getProcessInstanceId(), "title");
-            String originalName = t.getName();
+        List<Task> tasks = assignee.equals("all")
+                ? camundaProcessService.getAllActiveTasks()
+                : camundaProcessService.getTasksForAssignee(assignee);
 
-            // Special handling for Fix Rejection to make it clearer
-            if ("Activity_PM_Fix".equals(t.getTaskDefinitionKey())) {
-                originalName = "Correction Required";
+        tasks.forEach(task -> {
+            String pid = task.getProcessInstanceId();
+            String title = (String) runtimeService.getVariable(pid, "title");
+
+            if (title == null || title.isBlank()) {
+                Long rid = getVariableSafe(pid, "requestId", Long.class);
+                title = rid != null ? "Request " + rid : "Service Request";
             }
 
-            if (projectTitle != null) {
-                t.setName(projectTitle + " - " + originalName);
+            String action;
+            switch (task.getTaskDefinitionKey()) {
+                case "Activity_PM_Fix": action = "Fix Rejection"; break;
+                case "Activity_PM_Evaluate": action = "Evaluate Offers"; break;
+                case "Activity_PO_Approval": action = "Approve Request"; break;
+                case "Activity_PO_Validate": action = "Validate Selection"; break;
+                case "Activity_RP_Coordination": action = "Confirm Logistics"; break;
+                default: action = task.getName();
             }
+
+            task.setName(action + " – " + title);
         });
 
         model.addAttribute("tasks", tasks);
         model.addAttribute("viewTitle", "Inbox: " + assignee);
-
-        if (assignee.contains("pm")) {
-            model.addAttribute("drafts", serviceRequestService.getServiceRequestsByStatus(ServiceRequestStatus.DRAFT));
-        }
         return "camunda-tasks";
     }
 
-    // --- TASK DETAILS ---
+    // =====================================================
+    // TASK DETAILS
+    // =====================================================
     @GetMapping("/task/{taskId}")
     public String getTaskDetails(@PathVariable String taskId, Model model) {
+
         Task task = camundaProcessService.getTaskById(taskId);
-        if (task == null) return "redirect:/camunda/tasks/pm_user";
+        if (task == null) return "redirect:/camunda/tasks";
 
-        String pId = task.getProcessInstanceId();
-        String taskKey = task.getTaskDefinitionKey();
+        String pid = task.getProcessInstanceId();
+        String key = task.getTaskDefinitionKey();
+        Long requestId = getVariableSafe(pid, "requestId", Long.class);
 
-        // 1. Load Request
-        Long requestId = getVariableSafe(pId, "requestId", Long.class);
+        model.addAttribute("task", task);
         model.addAttribute("requestId", requestId);
+
         if (requestId != null) {
-            serviceRequestService.getServiceRequestById(requestId).ifPresent(req -> model.addAttribute("requestDetails", req));
+            serviceRequestService.getServiceRequestById(requestId)
+                    .ifPresent(req -> model.addAttribute("requestDetails", req));
         }
 
-        // 2. Load History
-        model.addAttribute("commentHistory", getVariableSafe(pId, "commentHistory", String.class));
+        model.addAttribute(
+                "commentHistory",
+                getVariableSafe(pid, "commentHistory", String.class)
+        );
 
-        // 3. Load Data based on Step
-        if ("Activity_PM_Evaluate".equals(taskKey) && requestId != null) {
-            List<ProviderOffer> offers = providerOfferService.getOffersByServiceRequest(requestId);
-            model.addAttribute("offers", offers);
+        if ("Activity_PM_Evaluate".equals(key) && requestId != null) {
+            model.addAttribute(
+                    "offers",
+                    providerOfferService.getOffersByServiceRequest(requestId)
+            );
         }
 
-        if ("Activity_RP_Coordination".equals(taskKey)) {
-            Long offerId = getVariableSafe(pId, "selectedOfferId", Long.class);
+        if ("Activity_PO_Validate".equals(key) || "Activity_RP_Coordination".equals(key)) {
+            Long offerId = getVariableSafe(pid, "selectedOfferId", Long.class);
             if (offerId != null) {
-                providerOfferService.getOfferById(offerId).ifPresent(o -> model.addAttribute("selectedOffer", o));
+                providerOfferService.getOfferById(offerId)
+                        .ifPresent(o -> model.addAttribute("selectedOffer", o));
             }
         }
 
-        if ("Activity_PM_Fix".equals(taskKey)) {
-            model.addAttribute("rejectionReason", getVariableSafe(pId, "rejectionReason", String.class));
-            task.setName("Fix Rejection");
-        }
+        model.addAttribute(
+                "rejectionReason",
+                getVariableSafe(pid, "rejectionReason", String.class)
+        );
 
-        model.addAttribute("task", task);
         return "camunda-task-details";
     }
 
-    // --- COMPLETE TASK ---
+    // =====================================================
+    // COMPLETE TASK (CRITICAL FIX HERE)
+    // =====================================================
     @PostMapping("/task/{taskId}/complete")
-    public String completeTask(@PathVariable String taskId, @RequestParam Map<String, String> formData, Authentication auth) {
+    public String completeTask(
+            @PathVariable String taskId,
+            @RequestParam Map<String, String> formData,
+            Authentication auth) {
+
         Task task = camundaProcessService.getTaskById(taskId);
-        if (task == null) return "redirect:/dashboard";
+        if (task == null) return "redirect:/camunda/tasks";
 
-        String pId = task.getProcessInstanceId();
-        String taskKey = task.getTaskDefinitionKey();
-        Long requestId = getVariableSafe(pId, "requestId", Long.class);
+        String pid = task.getProcessInstanceId();
+        String key = task.getTaskDefinitionKey();
+        Long requestId = getVariableSafe(pid, "requestId", Long.class);
 
-        // 1. Chat History Log
-        String newComment = "";
-        String role = (auth != null) ? auth.getAuthorities().stream().findFirst().get().getAuthority().replace("ROLE_", "") : "User";
+        // ---------- COMMENT HISTORY ----------
+        String role = auth != null
+                ? auth.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "")
+                : "USER";
 
-        if (formData.get("rejectionReason") != null && !formData.get("rejectionReason").isEmpty()) {
-            newComment = "🔴 REJECTED by " + role + ": " + formData.get("rejectionReason");
-        } else if (formData.get("pmJustification") != null && !formData.get("pmJustification").isEmpty()) {
-            newComment = "🔵 RESUBMITTED by PM: " + formData.get("pmJustification");
-        } else if (formData.get("selectionReason") != null && !formData.get("selectionReason").isEmpty()) {
-            newComment = "🟢 SELECTED by PM: " + formData.get("selectionReason");
+        String comment = buildComment(formData, role);
+        if (!comment.isEmpty()) {
+            String history = getVariableSafe(pid, "commentHistory", String.class);
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM HH:mm"));
+
+            runtimeService.setVariable(
+                    pid,
+                    "commentHistory",
+                    (history == null ? "" : history) + "[" + ts + "] " + comment + "\n"
+            );
         }
 
-        if (!newComment.isEmpty()) {
-            String existing = getVariableSafe(pId, "commentHistory", String.class);
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM HH:mm"));
-            runtimeService.setVariable(pId, "commentHistory", (existing == null ? "" : existing) + "[" + timestamp + "] " + newComment + "\n");
-        }
-
-        // 2. Status Updates & Variable Handling
         Map<String, Object> vars = new HashMap<>();
 
         if (requestId != null) {
-            if ("Activity_PO_Approval".equals(taskKey)) {
-                if ("false".equals(formData.get("approved"))) {
-                    serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.NEEDS_CORRECTION);
-                    vars.put("approved", false);
+
+            // ---- PO APPROVAL ----
+            if ("Activity_PO_Approval".equals(key)) {
+                boolean approved = Boolean.parseBoolean(formData.get("approved"));
+                runtimeService.setVariable(pid, "approved", approved);
+                vars.put("approved", approved);
+
+                if (!approved) {
+                    String reason = formData.get("rejectionReason");
+                    runtimeService.setVariable(pid, "rejectionReason", reason);
+                    serviceRequestService.updateServiceRequestStatus(
+                            requestId, ServiceRequestStatus.NEEDS_CORRECTION);
                 } else {
-                    serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.PUBLISHED);
-                    vars.put("approved", true);
+                    serviceRequestService.updateServiceRequestStatus(
+                            requestId, ServiceRequestStatus.PUBLISHED);
                 }
             }
-            else if ("Activity_PM_Fix".equals(taskKey)) {
-                serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.WAITING_APPROVAL);
+
+            // ---- PM EVALUATE ----
+            if ("Activity_PM_Evaluate".equals(key)) {
+                Long selectedOfferId = Long.valueOf(formData.get("selectedOfferId"));
+                runtimeService.setVariable(pid, "selectedOfferId", selectedOfferId);
+                vars.put("selectedOfferId", selectedOfferId);
+
+                serviceRequestService.updateServiceRequestStatus(
+                        requestId, ServiceRequestStatus.UNDER_EVALUATION);
             }
-            else if ("Activity_PM_Evaluate".equals(taskKey)) {
-                // Capture selectedOfferId
-                if(formData.containsKey("selectedOfferId")) {
-                    vars.put("selectedOfferId", Long.valueOf(formData.get("selectedOfferId")));
+
+            // =====================================================
+            // ✅ CRITICAL FIX — PO VALIDATE (PROCESS SCOPE)
+            // =====================================================
+            if ("Activity_PO_Validate".equals(key)) {
+                boolean verified = Boolean.parseBoolean(formData.get("verified"));
+
+                // 🔥 MUST BE PROCESS-SCOPE
+                runtimeService.setVariable(pid, "selectionApproved", verified);
+                vars.put("selectionApproved", verified);
+
+                if (!verified) {
+                    String reason = formData.get("rejectionReason");
+                    runtimeService.setVariable(pid, "rejectionReason", reason);
+
+                    serviceRequestService.updateServiceRequestStatus(
+                            requestId, ServiceRequestStatus.OFFERS_RECEIVED);
+                } else {
+                    serviceRequestService.updateServiceRequestStatus(
+                            requestId, ServiceRequestStatus.SELECTED_UNDER_VERIFICATION);
                 }
-                serviceRequestService.updateServiceRequestStatus(requestId, ServiceRequestStatus.SELECTED_UNDER_VERIFICATION);
+            }
+
+            // ---- PM FIX ----
+            if ("Activity_PM_Fix".equals(key)) {
+                serviceRequestService.updateServiceRequestStatus(
+                        requestId, ServiceRequestStatus.WAITING_APPROVAL);
             }
         }
 
-        // 3. Technical Scores
+        // ---- TECHNICAL SCORES ----
         formData.forEach((k, v) -> {
-            if (k.startsWith("techScore_")) providerOfferService.updateTechnicalScore(Long.parseLong(k.split("_")[1]), Double.parseDouble(v));
-        });
-
-        // 4. Submit to Camunda
-        formData.forEach((k, v) -> {
-            if (!k.startsWith("techScore_") && !"_csrf".equals(k) && !vars.containsKey(k)) {
-                if ("true".equals(v) || "false".equals(v)) vars.put(k, Boolean.valueOf(v));
-                else if (v.matches("-?\\d+")) vars.put(k, Long.valueOf(v));
-                else vars.put(k, v);
+            if (k.startsWith("techScore_")) {
+                providerOfferService.updateTechnicalScore(
+                        Long.parseLong(k.split("_")[1]),
+                        Double.parseDouble(v)
+                );
             }
         });
 
         camundaProcessService.completeTask(taskId, vars);
-        return "redirect:/camunda/tasks/" + (auth != null ? auth.getName() : "all");
+
+        return "redirect:/camunda/tasks/" +
+                (auth != null ? auth.getName() : "all");
     }
 
-    private <T> T getVariableSafe(String id, String name, Class<T> type) {
-        Object val = runtimeService.getVariable(id, name);
+    // =====================================================
+    // HELPERS
+    // =====================================================
+    private String buildComment(Map<String, String> data, String role) {
+        if (data.containsKey("rejectionReason"))
+            return "🔴 REJECTED by " + role + ": " + data.get("rejectionReason");
+
+        if (data.containsKey("selectionReason"))
+            return "🟢 SELECTED by PM: " + data.get("selectionReason");
+
+        if (data.containsKey("pmJustification"))
+            return "🔵 RESUBMITTED by PM: " + data.get("pmJustification");
+
+        return "";
+    }
+
+    private <T> T getVariableSafe(String pid, String name, Class<T> type) {
+        Object val = runtimeService.getVariable(pid, name);
         if (val == null) return null;
-        if (type == Long.class && val instanceof Integer) return type.cast(((Integer) val).longValue());
+
+        if (type == Long.class && val instanceof Integer) {
+            return type.cast(((Integer) val).longValue());
+        }
+
         return type.cast(val);
     }
 }

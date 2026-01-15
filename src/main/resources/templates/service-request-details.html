@@ -5,57 +5,136 @@
     <title>Service Request Details</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body class="bg-light">
 <div class="container mt-4">
-    <h1 class="mb-3">Service Request Details</h1>
 
-    <a th:href="@{/dashboard}" class="btn btn-secondary mb-4">← Back to Dashboard</a>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>Service Request Details</h3>
+        <a th:href="@{/dashboard}" class="btn btn-outline-secondary">← Back</a>
+    </div>
 
     <div class="card shadow-sm" th:if="${serviceRequest}">
-        <div class="card-header bg-primary text-white">
-            <h5 th:text="${serviceRequest.title}" class="mb-0"></h5>
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="m-0 text-primary" th:text="${serviceRequest.title}"></h5>
+                <span class="badge"
+                      th:classappend="${
+                        serviceRequest.status.name() == 'DRAFT' ? 'bg-secondary' :
+                        serviceRequest.status.name() == 'COMPLETED' ? 'bg-success' :
+                        serviceRequest.status.name() == 'REJECTED' ? 'bg-danger' :
+                        serviceRequest.status.name() == 'SELECTED_UNDER_VERIFICATION' ? 'bg-info' :
+                        'bg-warning text-dark'
+                      }"
+                      th:text="${serviceRequest.status}">
+                </span>
+            </div>
         </div>
 
         <div class="card-body">
-            <div class="row">
+            <div class="row g-4">
+
+                <!-- LEFT: FROM WORKFORCE (1B) -->
                 <div class="col-md-6">
-                    <h6>Description & Context</h6>
-                    <p th:text="${serviceRequest.description}" class="text-muted"></p>
-                    <p class="mb-1"><strong>Required Skills:</strong> <span th:text="${serviceRequest.requiredSkills}"></span></p>
-                    <p class="mb-1"><strong>Project Context:</strong> <span th:text="${serviceRequest.projectContext}"></span></p>
-                    <p class="mb-1"><strong>Duration:</strong> <span th:text="${serviceRequest.durationDays} + ' days'"></span></p>
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        From Workforce (1B)
+                    </h6>
+
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <td class="text-muted">Internal Request ID:</td>
+                            <td class="fw-bold" th:text="${serviceRequest.internalRequestId ?: '—'}"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Internal Project:</td>
+                            <td th:text="${serviceRequest.internalProjectName != null ?
+                                serviceRequest.internalProjectName + ' (ID: ' + serviceRequest.internalProjectId + ')' :
+                                '—'}">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Location:</td>
+                            <td th:text="${serviceRequest.performanceLocation ?: '—'}"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Project Context:</td>
+                            <td th:text="${serviceRequest.projectContext ?: '—'}"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Required Skills:</td>
+                            <td th:text="${serviceRequest.requiredSkills ?: '—'}"></td>
+                        </tr>
+                    </table>
+
+                    <div class="p-3 bg-light rounded">
+                        <strong>Description</strong><br>
+                        <span th:text="${serviceRequest.description ?: '—'}"></span>
+                    </div>
                 </div>
 
-                <div class="col-md-6 border-start ps-4">
-                    <h6>Status & Tracking</h6>
-                    <p class="mb-1"><strong>Current Status:</strong>
-                        <span class="badge rounded-pill"
-                              th:classappend="${serviceRequest.status.name() == 'REJECTED' ? 'bg-danger' :
-                                             (serviceRequest.status.name() == 'COMPLETED' ? 'bg-success' :
-                                             'bg-warning text-dark')}"
-                              th:text="${serviceRequest.status}">
-                        </span>
-                    </p>
+                <!-- RIGHT: CONTRACT & BUDGET -->
+                <div class="col-md-6">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        Contract & Budget
+                    </h6>
 
-                    <div th:if="${serviceRequest.status.name() == 'REJECTED' and serviceRequest.rejectionReason != null}" class="alert alert-danger mt-3 py-2 small">
-                        <strong>REJECTED REASON:</strong> <span th:text="${serviceRequest.rejectionReason}"></span>
+                    <div class="alert alert-info py-2" th:if="${serviceRequest.contractId}">
+                        <strong>Contract ID:</strong>
+                        <span th:text="${serviceRequest.contractId}"></span>
                     </div>
 
-                    <p class="mt-3 mb-1 small text-muted">Created: <span th:text="${#temporals.format(serviceRequest.createdAt, 'dd.MM.yyyy HH:mm')}"></span></p>
-                    <p class="mb-1 small text-muted">Contract ID (Mock): <span th:text="${serviceRequest.contractId}"></span></p>
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <td class="text-muted">Hourly Rate:</td>
+                            <td class="fw-bold text-success"
+                                th:text="${serviceRequest.hourlyRate != null ? '€' + serviceRequest.hourlyRate + ' / hr' : '—'}">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Daily Cap:</td>
+                            <td class="fw-bold text-success"
+                                th:text="${serviceRequest.maxDailyRate != null ? '€' + serviceRequest.maxDailyRate : '—'}">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Hours / Week:</td>
+                            <td th:text="${serviceRequest.hoursPerWeek ?: '—'}"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Min Experience:</td>
+                            <td th:text="${serviceRequest.minExperience != null ? serviceRequest.minExperience + ' years' : '—'}"></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Timeline:</td>
+                            <td th:text="${serviceRequest.startDate != null ?
+                                serviceRequest.startDate + ' — ' + serviceRequest.endDate :
+                                'Dates not set'}">
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div th:if="${serviceRequest.status.name() == 'REJECTED' and serviceRequest.rejectionReason != null}"
+                         class="alert alert-danger py-2 mt-3">
+                        <strong>Rejection Reason:</strong>
+                        <span th:text="${serviceRequest.rejectionReason}"></span>
+                    </div>
                 </div>
+
             </div>
 
-            <div class="mt-4 border-top pt-3">
+            <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                <span class="text-muted small">
+                    System ID: <span th:text="${serviceRequest.id}"></span>
+                </span>
+
                 <a th:href="@{/offers/request/{id}(id=${serviceRequest.id})}"
-                   class="btn btn-info">
-                    View Offers (From Group 4)
+                   class="btn btn-primary">
+                    View Offers (Group 4B)
                 </a>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</div>
 </body>
 </html>

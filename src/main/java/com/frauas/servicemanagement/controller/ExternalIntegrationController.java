@@ -1,23 +1,20 @@
 package com.frauas.servicemanagement.controller;
 
-import com.frauas.servicemanagement.entity.ProviderOffer;
-import com.frauas.servicemanagement.entity.ServiceRequest;
-import com.frauas.servicemanagement.service.CamundaProcessService;
-import com.frauas.servicemanagement.service.ProviderOfferService;
-import com.frauas.servicemanagement.service.ServiceRequestService;
+import com.frauas.servicemanagement.entity.*;
+import com.frauas.servicemanagement.service.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.runtime.Execution;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
-/**
- * External Integration Controller
- * Handles communication with other project groups
- */
 @RestController
 @RequestMapping("/api/integration")
 public class ExternalIntegrationController {
@@ -29,168 +26,247 @@ public class ExternalIntegrationController {
     private ProviderOfferService providerOfferService;
 
     @Autowired
-    private CamundaProcessService camundaProcessService;
-
-    @Autowired
     private RuntimeService runtimeService;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     // =====================================================
-    // GROUP 1: WORKFORCE INTEGRATION (1b Request)
-    // Receives workforce requirement and starts workflow
+    // 1B → INBOUND WORKFORCE REQUEST (CREATE DRAFT ONLY)
     // =====================================================
     @PostMapping("/group1/workforce-request")
-    public ResponseEntity<String> receiveWorkforceNeed(@RequestBody Map<String, Object> payload) {
-        ServiceRequest request = new ServiceRequest();
-
-        // Map fields safely
-        request.setTitle((String) payload.getOrDefault("jobTitle", "Workforce Request (Needs Review)"));
-        request.setDescription((String) payload.getOrDefault("description", "External request from Group 1b"));
-        request.setProjectContext((String) payload.getOrDefault("project", "Unknown Project"));
-
-        // Handle numbers safely
-        if (payload.get("internalRequestId") != null) {
-            request.setInternalRequestId(Long.valueOf(payload.get("internalRequestId").toString()));
-        }
-
-        // Save as DRAFT so PM sees it in "My Drafts"
-        serviceRequestService.createServiceRequest(request);
-
-        // ❌ REMOVED: serviceRequestService.startProcessForRequest(request.getId());
-        // ✅ REASON: PM must review first.
-
-        return ResponseEntity.ok("Request received. PM will review and initiate process.");
-    }
-
-    // =====================================================
-    // GROUP 1B: DECISION CALLBACK (NEW)
-    // Accept / Reject recommendation to unblock BPMN
-    // =====================================================
-    @PostMapping("/group1/decision")
-    public ResponseEntity<String> receive1bDecision(
+    public ResponseEntity<String> receiveWorkforceNeed(
             @RequestBody Map<String, Object> payload) {
 
-        Long requestId =
-                Long.valueOf(payload.get("requestId").toString());
-        String decision =
-                payload.get("decision").toString(); // ACCEPTED / REJECTED
+        ServiceRequest req = new ServiceRequest();
 
-        System.out.println(
-                ">>> [API IN] GROUP 1B DECISION: "
-                        + decision + " for Request ID " + requestId);
-
-        Execution execution = runtimeService.createExecutionQuery()
-                .processVariableValueEquals("requestId", requestId)
-                .messageEventSubscriptionName("Message_1b_Decision")
-                .singleResult();
-
-        if (execution == null) {
-            return ResponseEntity.badRequest().body(
-                    "No active process waiting for 1b decision for Request ID " + requestId);
+        // ---------- RAW PAYLOAD (AUDIT / DEBUG) ----------
+        try {
+            req.setRawPayload(objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            req.setRawPayload("ERROR_SERIALIZING_JSON");
         }
 
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("oneBDecision", decision);
+        // ---------- SAFE FIELD MAPPING ----------
+        if (payload.get("internalRequestId") != null) {
+            req.setInternalRequestId(
+                    Long.valueOf(payload.get("internalRequestId").toString()));
+        }
 
-        runtimeService.createMessageCorrelation("Message_1b_Decision")
-                .processInstanceId(execution.getProcessInstanceId())
-                .setVariables(variables)
-                .correlate();
+        if (payload.get("projectId") != null) {
+            req.setInternalProjectId(
+                    Long.valueOf(payload.get("projectId").toString()));
+        }
+
+        req.setInternalProjectName(
+                String.valueOf(payload.getOrDefault("projectName", "")));
+
+        req.setTitle(
+                String.valueOf(payload.getOrDefault("jobTitle", "Workforce Request")));
+
+        req.setDescription(
+                String.valueOf(payload.getOrDefault("description", "")));
+
+        if (payload.get("availabilityHoursPerWeek") != null) {
+            req.setHoursPerWeek(
+                    Integer.parseInt(payload.get("availabilityHoursPerWeek").toString()));
+        }
+
+        if (payload.get("wagePerHour") != null) {
+            double hourly =
+                    Double.parseDouble(payload.get("wagePerHour").toString());
+            req.setHourlyRate(hourly);
+            req.setMaxDailyRate(hourly * 8);
+        }
+
+        if (payload.get("skills") instanceof List) {
+            req.setRequiredSkills(payload.get("skills").toString());
+        } else {
+            req.setRequiredSkills(
+                    String.valueOf(payload.getOrDefault("skills", "")));
+        }
+
+        if (payload.get("experienceYears") != null) {
+            req.setMinExperience(
+                    Integer.parseInt(payload.get("experienceYears").toString()));
+        }
+
+        req.setPerformanceLocation(
+                String.valueOf(payload.getOrDefault("location", "Remote")));
+
+        req.setProjectContext(
+                String.valueOf(payload.getOrDefault("projectContext", "")));
+
+        if (payload.get("startDate") != null) {
+            req.setStartDate(
+                    LocalDate.parse(payload.get("startDate").toString()));
+        }
+
+        if (payload.get("endDate") != null) {
+            req.setEndDate(
+                    LocalDate.parse(payload.get("endDate").toString()));
+        }
+
+        // ---------- SAVE AS DRAFT ----------
+        serviceRequestService.createServiceRequest(req);
 
         return ResponseEntity.ok(
-                "Decision received and process unblocked successfully.");
+                "Draft created successfully. PM review pending.");
     }
 
     // =====================================================
-    // GROUP 4: CONTRACT ACKNOWLEDGEMENT
-    // Confirms contract preparation has started
+    // 1B → DECISION CALLBACK (ROBUST + TYPE-SAFE + DEBUG)
     // =====================================================
-    @PostMapping("/group4/notify")
-    public ResponseEntity<String> receiveNotification(
-            @RequestBody Long offerId) {
+    @PostMapping("/group1/decision")
+    public ResponseEntity<String> receive1bDecision(@RequestBody Map<String, Object> payload) {
 
-        return ResponseEntity.ok(
-                "Provider Management System acknowledged. "
-                        + "Contract preparation started for Offer ID: " + offerId);
+        System.out.println(">>> [API IN] 1B Payload: " + payload);
+
+        if (!payload.containsKey("requestId") || !payload.containsKey("decision")) {
+            return ResponseEntity.badRequest()
+                    .body("Error: Missing 'requestId' or 'decision'");
+        }
+
+        try {
+            // ✅ STRING-BASED COMPARISON (TYPE SAFE)
+            String targetReqId = String.valueOf(payload.get("requestId"));
+            String decision = String.valueOf(payload.get("decision"));
+
+            System.out.println(">>> [API IN] Searching waiting process for Request ID: " + targetReqId);
+
+            // 1️⃣ Get ALL executions waiting for the message
+            List<Execution> waitingExecutions =
+                    runtimeService.createExecutionQuery()
+                            .messageEventSubscriptionName("Message_1b_Decision")
+                            .list();
+
+            Execution matchedExecution = null;
+
+            // 2️⃣ Manual, type-safe matching
+            for (Execution exec : waitingExecutions) {
+                Object storedReqId =
+                        runtimeService.getVariable(exec.getId(), "requestId");
+
+                if (storedReqId != null &&
+                        String.valueOf(storedReqId).equals(targetReqId)) {
+                    matchedExecution = exec;
+                    break;
+                }
+            }
+
+            // 3️⃣ No match → DEBUG OUTPUT
+            if (matchedExecution == null) {
+                System.err.println("!!! No matching execution found. Dumping wait states:");
+                for (Execution exec : waitingExecutions) {
+                    System.err.println(
+                            "   - Exec=" + exec.getId()
+                                    + " | requestId="
+                                    + runtimeService.getVariable(exec.getId(), "requestId")
+                    );
+                }
+                return ResponseEntity.badRequest()
+                        .body("No active process found for Request ID " + targetReqId);
+            }
+
+            // 4️⃣ Resume process
+            System.out.println(
+                    ">>> Resuming Process Instance: "
+                            + matchedExecution.getProcessInstanceId());
+
+            runtimeService.createMessageCorrelation("Message_1b_Decision")
+                    .processInstanceId(matchedExecution.getProcessInstanceId())
+                    .setVariable("oneBDecision", decision)
+                    .correlate();
+
+            return ResponseEntity.ok("Decision processed successfully.");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError()
+                    .body("Error processing decision: " + e.getMessage());
+        }
     }
 
+
     // =====================================================
-    // GROUP 4: PROVIDER OFFER (REAL INTEGRATION)
-    // Accepts Group 4 JSON structure
+    // 4B → INBOUND PROVIDER OFFER (ROBUST)
     // =====================================================
     @PostMapping("/group4/offer")
     public ResponseEntity<String> receiveProviderOffer(
             @RequestBody Map<String, Object> payload) {
 
-        Long serviceRequestId =
-                Long.valueOf(payload.get("serviceRequestId").toString());
+        Long reqId =
+                Long.valueOf(String.valueOf(payload.get("serviceRequestId")));
 
         ProviderOffer offer = new ProviderOffer();
 
-        offer.setExternalOfferId(payload.get("offerId").toString());
-        offer.setProviderName(payload.get("company").toString());
-        offer.setServiceType(payload.get("serviceType").toString());
-        offer.setSpecialistName(payload.get("specialistName").toString());
-        offer.setDailyRate(Double.valueOf(payload.get("dailyRate").toString()));
-        offer.setOnsiteDays(Integer.valueOf(payload.get("onsiteDays").toString()));
-        offer.setTravelCost(Double.valueOf(payload.get("travellingCost").toString()));
-        offer.setTotalCost(Double.valueOf(payload.get("totalCost").toString()));
-        offer.setContractType(payload.get("contractualRelationship").toString());
-        offer.setSkills(payload.get("skills").toString());
+        // ---------- IDENTIFIERS ----------
+        offer.setExternalOfferId(String.valueOf(payload.get("offerId")));
+        offer.setProviderName(String.valueOf(payload.get("company")));
 
-        providerOfferService.submitOffer(serviceRequestId, offer);
+        if (payload.containsKey("contractid")) {
+            offer.setContractId(String.valueOf(payload.get("contractid")));
+        } else if (payload.containsKey("contractId")) {
+            offer.setContractId(String.valueOf(payload.get("contractId")));
+        }
+
+        // ---------- NAME ----------
+        if (payload.containsKey("firstName")
+                && payload.containsKey("lastName")) {
+
+            offer.setFirstName(String.valueOf(payload.get("firstName")));
+            offer.setLastName(String.valueOf(payload.get("lastName")));
+            offer.setSpecialistName(
+                    offer.getFirstName() + " " + offer.getLastName());
+
+        } else {
+            String full =
+                    String.valueOf(payload.getOrDefault("specialistName", "Unknown"));
+            offer.setSpecialistName(full);
+
+            String[] parts = full.split(" ", 2);
+            offer.setFirstName(parts[0]);
+            offer.setLastName(parts.length > 1 ? parts[1] : "");
+        }
+
+        // ---------- EMAIL ----------
+        offer.setEmail(
+                String.valueOf(payload.getOrDefault("email", "contact@provider.com")));
+
+        // ---------- EXPERIENCE ----------
+        offer.setExperienceYears(
+                payload.get("experienceYears") != null
+                        ? Float.parseFloat(payload.get("experienceYears").toString())
+                        : 0.0f
+        );
+
+        // ---------- FINANCIALS ----------
+        if (payload.get("wagePerHour") != null) {
+            double hourly =
+                    Double.parseDouble(payload.get("wagePerHour").toString());
+            offer.setHourlyRate(hourly);
+            offer.setDailyRate(hourly * 8);
+        } else {
+            double daily =
+                    Double.parseDouble(payload.get("dailyRate").toString());
+            offer.setDailyRate(daily);
+            offer.setHourlyRate(daily / 8);
+        }
+
+        offer.setTotalCost(
+                Double.parseDouble(payload.get("totalCost").toString()));
+
+        offer.setSkills(String.valueOf(payload.get("skills")));
+
+        // ---------- SAVE + SCORE + STATUS ----------
+        providerOfferService.submitOffer(reqId, offer);
+        providerOfferService.calculateRanking(reqId);
+
+        serviceRequestService.updateServiceRequestStatus(
+                reqId,
+                ServiceRequestStatus.OFFERS_RECEIVED
+        );
 
         return ResponseEntity.ok(
-                "Offer received successfully and queued for evaluation.");
-    }
-
-    // =====================================================
-    // GROUP 4: PROVIDER SYSTEM SIMULATION (MOCK)
-    // Used when Group 4 is unavailable
-    // =====================================================
-    @PostMapping("/providers/publish-request")
-    public List<ProviderOffer> simulateProviderResponses(
-            @RequestBody ServiceRequest request) {
-
-        System.out.println(
-                ">>> EXTERNAL INTEGRATION: Broadcasting request: "
-                        + request.getTitle());
-
-        List<ProviderOffer> offers = new ArrayList<>();
-
-        ProviderOffer offer1 = new ProviderOffer();
-        offer1.setProviderName("Global Tech Solutions");
-        offer1.setDailyRate(95.50);
-        offer1.setSpecialistName("Senior DevOps Engineer");
-        offer1.setSkills("Docker, Kubernetes, CI/CD");
-        offer1.setOnsiteDays(10);
-        offer1.setTravelCost(1200.00);
-        offer1.setTotalCost(9500.00);
-        offer1.setContractType("Time & Material");
-
-        ProviderOffer offer2 = new ProviderOffer();
-        offer2.setProviderName("Cloud Innovators GmbH");
-        offer2.setDailyRate(87.25);
-        offer2.setSpecialistName("Full-stack Developer");
-        offer2.setSkills("Java, Spring Boot, AWS");
-        offer2.setOnsiteDays(5);
-        offer2.setTravelCost(800.00);
-        offer2.setTotalCost(8200.00);
-        offer2.setContractType("Fixed Price");
-
-        ProviderOffer offer3 = new ProviderOffer();
-        offer3.setProviderName("FraUAS Research Lab");
-        offer3.setDailyRate(75.00);
-        offer3.setSpecialistName("R&D Specialist Team");
-        offer3.setSkills("AI Research, Prototyping");
-        offer3.setOnsiteDays(0);
-        offer3.setTravelCost(0.00);
-        offer3.setTotalCost(7000.00);
-        offer3.setContractType("Research Contract");
-
-        offers.add(offer1);
-        offers.add(offer2);
-        offers.add(offer3);
-
-        return offers;
+                "Offer received, evaluated, and stored successfully.");
     }
 }

@@ -10,52 +10,25 @@
 
     <style>
         body { background-color: #f4f6f9; }
-
-        .dashboard-header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px 0;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-
-        .stat-card:hover { transform: translateY(-5px); }
-
-        .nav-tabs .nav-link.active {
-            border-top: 3px solid #2c3e50;
-            font-weight: bold;
-        }
-
-        .table-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        }
+        .dashboard-header { background: #2c3e50; color: white; padding: 20px 0; margin-bottom: 30px; }
+        .stat-card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .nav-tabs .nav-link.active { border-top: 3px solid #2c3e50; font-weight: bold; }
+        .table-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     </style>
 </head>
 
 <body>
 
+<!-- HEADER -->
 <div class="dashboard-header">
     <div class="container d-flex justify-content-between align-items-center">
         <h3 class="m-0">
             <i class="fas fa-chart-line me-2"></i> Service Management Tool
         </h3>
         <div>
-            <span class="me-3">
-                Welcome, <span sec:authentication="name" class="fw-bold"></span>
-            </span>
-            <form th:action="@{/logout}" method="post" style="display:inline;">
-                <button class="btn btn-outline-light btn-sm rounded-pill">
-                    Logout
-                </button>
+            Welcome, <span sec:authentication="name" class="fw-bold"></span>
+            <form th:action="@{/logout}" method="post" class="d-inline ms-3">
+                <button class="btn btn-outline-light btn-sm rounded-pill">Logout</button>
             </form>
         </div>
     </div>
@@ -67,108 +40,78 @@
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card stat-card bg-primary text-white p-3">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Active Requests</h5>
-                        <h2 th:text="${activeCount}">0</h2>
-                    </div>
-                    <i class="fas fa-cog fa-3x opacity-50"></i>
-                </div>
+                <h5>Active Requests</h5>
+                <h2 th:text="${activeCount}">0</h2>
             </div>
         </div>
-
         <div class="col-md-4">
             <div class="card stat-card bg-warning text-dark p-3">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Drafts</h5>
-                        <h2 th:text="${draftCount}">0</h2>
-                    </div>
-                    <i class="fas fa-pencil-alt fa-3x opacity-50"></i>
-                </div>
+                <h5>Drafts</h5>
+                <h2 th:text="${draftCount}">0</h2>
             </div>
         </div>
-
         <div class="col-md-4">
             <div class="card stat-card bg-success text-white p-3">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Completed</h5>
-                        <h2 th:text="${completedCount}">0</h2>
-                    </div>
-                    <i class="fas fa-check-circle fa-3x opacity-50"></i>
-                </div>
+                <h5>Completed</h5>
+                <h2 th:text="${completedCount}">0</h2>
             </div>
         </div>
     </div>
 
     <!-- TABS -->
-    <ul class="nav nav-tabs mb-3" id="myTab">
+    <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
-            <button class="nav-link active" id="tasks-tab"
-                    data-bs-toggle="tab" data-bs-target="#tasks">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tasks">
                 <i class="fas fa-exclamation-circle text-danger me-2"></i>
                 Actions Required (<span th:text="${activeTasks.size()}"></span>)
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="all-tab"
-                    data-bs-toggle="tab" data-bs-target="#all">
-                <i class="fas fa-list me-2"></i> All Requests (History)
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="create-tab"
-                    data-bs-toggle="tab" data-bs-target="#create">
-                <i class="fas fa-plus me-2"></i> Create New
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#all">
+                <i class="fas fa-list me-2"></i> All Requests
             </button>
         </li>
     </ul>
 
     <div class="tab-content">
 
-        <!-- TASKS -->
+        <!-- ================= TASKS ================= -->
         <div class="tab-pane fade show active" id="tasks">
             <div class="table-card">
-
-                <div th:if="${activeTasks.empty}" class="text-center py-4 text-muted">
-                    <i class="fas fa-check fa-2x mb-2"></i><br>
-                    No pending actions.
+                <div th:if="${activeTasks.empty}" class="text-center text-muted py-4">
+                    No pending actions 🎉
                 </div>
 
-                <div th:unless="${activeTasks.empty}" class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                        <tr>
-                            <th>Task Name</th>
-                            <th>Process ID</th>
-                            <th>Created</th>
-                            <th>Action</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="task : ${activeTasks}">
-                            <td class="fw-bold text-primary" th:text="${task.name}"></td>
-                            <td th:text="${task.processInstanceId}"></td>
-                            <td th:text="${#dates.format(task.createTime, 'dd.MM HH:mm')}"></td>
-                            <td>
-                                <a th:href="@{/camunda/task/{id}(id=${task.id})}"
-                                   class="btn btn-sm btn-danger rounded-pill px-3">
-                                    Process Now <i class="fas fa-arrow-right"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-
+                <table th:unless="${activeTasks.empty}"
+                       class="table table-hover align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th>Task</th>
+                        <th>Process ID</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="task : ${activeTasks}">
+                        <td th:text="${task.name}" class="fw-bold text-primary"></td>
+                        <td th:text="${task.processInstanceId}"></td>
+                        <td th:text="${#dates.format(task.createTime, 'dd.MM HH:mm')}"></td>
+                        <td>
+                            <a th:href="@{/camunda/task/{id}(id=${task.id})}"
+                               class="btn btn-sm btn-danger rounded-pill">
+                                Process
+                            </a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- ALL REQUESTS -->
+        <!-- ================= ALL REQUESTS ================= -->
         <div class="tab-pane fade" id="all">
             <div class="table-card">
-
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
                     <tr>
@@ -176,17 +119,18 @@
                         <th>Title</th>
                         <th>Status</th>
                         <th>Created</th>
-                        <th>Contract ID</th>
+                        <th>Contract</th>
                         <th>Actions</th>
                     </tr>
                     </thead>
 
                     <tbody>
                     <tr th:each="req : ${serviceRequests}">
-                        <td th:text="${req.id}"></td>
+                        <!-- ✅ DISPLAY formatted ID -->
+                        <td th:text="${req.formattedId}"></td>
+
                         <td class="fw-bold" th:text="${req.title}"></td>
 
-                        <!-- ✅ UPDATED BADGE LOGIC -->
                         <td>
                             <span class="badge rounded-pill"
                                   th:classappend="${
@@ -201,113 +145,38 @@
                         </td>
 
                         <td th:text="${#temporals.format(req.createdAt, 'dd.MM.yyyy')}"></td>
-                        <td th:text="${req.contractId}"></td>
+                        <td th:text="${req.contractId ?: '-'}"></td>
 
-                        <td>
+                        <!-- ✅ ACTIONS -->
+                        <td class="d-flex gap-1">
+
+                            <!-- EDIT (DRAFT ONLY) -->
+                            <a th:if="${req.status.name() == 'DRAFT'}"
+                               th:href="@{/service-requests/{id}/edit(id=${req.id})}"
+                               class="btn btn-sm btn-warning">
+                                Edit <i class="fas fa-edit"></i>
+                            </a>
+
+                            <!-- START PROCESS -->
                             <form th:if="${req.status.name() == 'DRAFT'}"
                                   th:action="@{/service-requests/{id}/process(id=${req.id})}"
-                                  method="post" class="d-inline">
+                                  method="post">
                                 <button class="btn btn-sm btn-primary">
                                     Start <i class="fas fa-play"></i>
                                 </button>
                             </form>
 
-                            <a th:if="${req.status.name() == 'REJECTED'}"
-                               href="#tasks"
-                               onclick="var tab = new bootstrap.Tab(document.querySelector('#tasks-tab')); tab.show();"
-                               class="btn btn-sm btn-danger">
-                                Fix Issue <i class="fas fa-wrench"></i>
-                            </a>
-
-                            <a th:if="${req.status.name() != 'DRAFT' && req.status.name() != 'REJECTED'}"
+                            <!-- DETAILS -->
+                            <a th:if="${req.status.name() != 'DRAFT'}"
                                th:href="@{/service-requests/{id}(id=${req.id})}"
                                class="btn btn-sm btn-outline-secondary">
                                 Details <i class="fas fa-eye"></i>
                             </a>
+
                         </td>
                     </tr>
                     </tbody>
                 </table>
-
-            </div>
-        </div>
-
-        <!-- CREATE -->
-        <div class="tab-pane fade" id="create">
-            <div class="table-card">
-                <h5 class="mb-3">New Service Request</h5>
-
-                <form th:action="@{/service-requests}"
-                      th:object="${newRequest}" method="post">
-
-                    <div class="row g-3">
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Title</label>
-                            <input type="text" class="form-control"
-                                   th:field="*{title}" required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Project Context</label>
-                            <input type="text" class="form-control"
-                                   th:field="*{projectContext}" required>
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="form-label">Start Date</label>
-                            <input type="date" class="form-control"
-                                   th:field="*{startDate}" id="startDate"
-                                   onchange="calcDays()">
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="form-label">End Date</label>
-                            <input type="date" class="form-control"
-                                   th:field="*{endDate}" id="endDate"
-                                   onchange="calcDays()">
-                        </div>
-
-                        <div class="col-md-2">
-                            <label class="form-label">Duration (Days)</label>
-                            <input type="number" class="form-control"
-                                   th:field="*{durationDays}"
-                                   id="durationDays" readonly>
-                        </div>
-
-                        <div class="col-md-2">
-                            <label class="form-label">Min Exp (Yrs)</label>
-                            <input type="number" class="form-control"
-                                   th:field="*{minExperience}" value="3">
-                        </div>
-
-                        <div class="col-md-2">
-                            <label class="form-label">Max Rate (€)</label>
-                            <input type="number" class="form-control"
-                                   th:field="*{maxDailyRate}">
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label">Required Skills</label>
-                            <textarea class="form-control"
-                                      th:field="*{requiredSkills}" rows="2"></textarea>
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label">Description</label>
-                            <textarea class="form-control"
-                                      th:field="*{description}" rows="3"></textarea>
-                        </div>
-
-                        <div class="col-12 text-end">
-                            <button type="submit"
-                                    class="btn btn-success px-4">
-                                Create Draft
-                            </button>
-                        </div>
-
-                    </div>
-                </form>
             </div>
         </div>
 
@@ -315,16 +184,5 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    function calcDays() {
-        const s = new Date(document.getElementById('startDate').value);
-        const e = new Date(document.getElementById('endDate').value);
-        if (s && e && e > s) {
-            document.getElementById('durationDays').value =
-                Math.ceil((e - s) / (1000 * 60 * 60 * 24));
-        }
-    }
-</script>
-
 </body>
 </html>

@@ -7,7 +7,6 @@ import org.camunda.bpm.engine.task.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,18 +19,14 @@ public class CamundaProcessService {
     @Autowired
     private TaskService taskService;
 
-    public String startServiceRequestProcess(Long requestId, String title, String description) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("requestId", requestId);
-        variables.put("title", title);
-        variables.put("description", description);
-        variables.put("procurementOfficer", "procurement_officer");
-        variables.put("projectManager", "project_manager");
+    // ✅ FIX: Accept variables map directly
+    public String startServiceRequestProcess(Map<String, Object> variables) {
 
-        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(
-                "service-request-process",
-                variables
-        );
+        ProcessInstance processInstance =
+                runtimeService.startProcessInstanceByKey(
+                        "service-request-process",
+                        variables
+                );
 
         return processInstance.getId();
     }
