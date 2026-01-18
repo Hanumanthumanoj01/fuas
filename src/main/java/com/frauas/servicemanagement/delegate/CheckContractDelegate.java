@@ -17,21 +17,47 @@ public class CheckContractDelegate implements JavaDelegate {
     public void execute(DelegateExecution execution) throws Exception {
         Long requestId = (Long) execution.getVariable("requestId");
 
-        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 2B: Validating Contract Eligibility");
-        System.out.println("   PAYLOAD: { \"requestType\": \"Single Request\", \"domain\": \"IT\", \"role\": \"Developer\" }");
-
-        // Mock Response from 2b
-        String contractId = "CTR-2025-" + (1000 + (long)(Math.random() * 9000));
-        System.out.println(">>> [API IN] GROUP 2B RESPONSE: Eligible. Contract ID: " + contractId);
-
-        // Update Entity
         Optional<ServiceRequest> reqOpt = serviceRequestService.getServiceRequestById(requestId);
+
         if(reqOpt.isPresent()) {
             ServiceRequest req = reqOpt.get();
-            req.setContractId(contractId);
-            serviceRequestService.createServiceRequest(req); // Save
-        }
 
-        execution.setVariable("contractId", contractId);
+            // 1. Send RICH Request to 2b (As requested)
+            System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 2B: Validating Contract Eligibility");
+            System.out.println("   PAYLOAD: {");
+            System.out.println("      \"internalRequestId\": " + req.getInternalRequestId() + ",");
+            System.out.println("      \"projectId\": " + req.getInternalProjectId() + ",");
+            System.out.println("      \"projectName\": \"" + req.getInternalProjectName() + "\",");
+            System.out.println("      \"jobTitle\": \"" + req.getTitle() + "\"");
+            System.out.println("   }");
+
+            // 2. MOCK RESPONSE LOGIC (Simulate Valid vs Invalid)
+            // Logic: If the Project ID is '999', simulate NO CONTRACT (Failure Case)
+            boolean contractExists = req.getInternalProjectId() != 999;
+
+            if (contractExists) {
+                //  CASE A: Contract Found
+                String contractId = "CTR-2025-" + (1000 + (long)(Math.random() * 9000));
+
+                System.out.println(">>> [API IN] GROUP 2B RESPONSE (Case A):");
+                System.out.println("   { \"contractId\": \"" + contractId + "\", \"status\": \"ACTIVE\", \"validUntil\": \"2026-12-31\" }");
+
+                req.setContractId(contractId);
+                serviceRequestService.createServiceRequest(req); // Save ID
+
+                // Set Process Variables
+                execution.setVariable("contractId", contractId);
+                execution.setVariable("contractValid", true);
+
+            } else {
+                //  CASE B: No Contract
+                System.out.println(">>> [API IN] GROUP 2B RESPONSE (Case B):");
+                System.out.println("   { \"status\": \"NO_ACTIVE_CONTRACT\" }");
+
+                execution.setVariable("contractValid", false);
+            }
+        } else {
+            throw new RuntimeException("Request not found in DB: " + requestId);
+        }
     }
 }

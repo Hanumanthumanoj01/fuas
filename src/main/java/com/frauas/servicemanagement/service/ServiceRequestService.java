@@ -75,36 +75,40 @@ public class ServiceRequestService {
        PHASE 1 — START CAMUNDA PROCESS
        ===================================================== */
 
+    /* =====================================================
+       PHASE 1 — START CAMUNDA PROCESS
+       ===================================================== */
     public void startProcessForRequest(Long requestId) {
 
         ServiceRequest request = serviceRequestRepository.findById(requestId)
-                .orElseThrow(() ->
-                        new RuntimeException("ServiceRequest not found: " + requestId));
+                .orElseThrow(() -> new RuntimeException("Request not found"));
 
         if (request.getStatus() != ServiceRequestStatus.DRAFT) {
-            throw new IllegalStateException(
-                    "Only DRAFT requests can be submitted to workflow."
-            );
+            throw new IllegalStateException("Only DRAFT requests can be started.");
         }
 
-        // ✅ Explicit process variables
         Map<String, Object> variables = new HashMap<>();
-        variables.put("requestId", Long.valueOf(request.getId()));
+        variables.put("requestId", request.getId());
         variables.put("title", request.getTitle());
         variables.put("description", request.getDescription());
         variables.put("procurementOfficer", "po_user");
         variables.put("projectManager", "pm_user");
 
-        String processInstanceId =
-                camundaProcessService.startServiceRequestProcess(variables);
+        // 1. Start Process (This runs CheckContractDelegate synchronously!)
+        String processInstanceId = camundaProcessService.startServiceRequestProcess(variables);
 
-        request.setStatus(ServiceRequestStatus.WAITING_APPROVAL);
-        serviceRequestRepository.save(request);
+        System.out.println(">>> BPMN STARTED | Request ID=" + requestId + " | Instance=" + processInstanceId);
 
-        System.out.println(
-                ">>> BPMN STARTED | Request ID=" + requestId +
-                        " | Process Instance=" + processInstanceId
-        );
+        // 2. RE-FETCH from DB to check if Delegate changed status to REJECTED
+        ServiceRequest updatedRequest = serviceRequestRepository.findById(requestId).orElseThrow();
+
+        // 3. Only set to WAITING_APPROVAL if it wasn't already rejected/finished
+        if (updatedRequest.getStatus() != ServiceRequestStatus.REJECTED
+                && updatedRequest.getStatus() != ServiceRequestStatus.COMPLETED) {
+
+            updatedRequest.setStatus(ServiceRequestStatus.WAITING_APPROVAL);
+            serviceRequestRepository.save(updatedRequest);
+        }
     }
 
     /* =====================================================

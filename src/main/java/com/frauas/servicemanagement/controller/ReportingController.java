@@ -1,7 +1,7 @@
 package com.frauas.servicemanagement.controller;
 
-import com.frauas.servicemanagement.entity.ProviderOffer;
-import com.frauas.servicemanagement.entity.ServiceRequest;
+import com.frauas.servicemanagement.dto.ReportingOfferDTO;
+import com.frauas.servicemanagement.dto.ReportingRequestDTO;
 import com.frauas.servicemanagement.service.ReportingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -9,45 +9,41 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/reporting")
-@CrossOrigin(origins = "*") // Critical for Power BI access
+@CrossOrigin(origins = "*")
 public class ReportingController {
 
     @Autowired
     private ReportingService reportingService;
 
-    // --- 1. EXISTING SUMMARIES (Keep for high-level KPIs) ---
+    // --- 1. CLEAN REQUESTS (Issue 1) ---
+    @GetMapping("/requests/all")
+    public List<ReportingRequestDTO> getAllRequests() {
+        System.out.println(">>> REPORTING: Fetching clean request list...");
+        return reportingService.getAllRequestsClean();
+    }
+
+    // --- 2. CLEAN OFFERS (Issue 2) ---
+    @GetMapping("/offers/all")
+    public List<ReportingOfferDTO> getAllOffers() {
+        System.out.println(">>> REPORTING: Fetching clean offer list...");
+        return reportingService.getAllOffersClean();
+    }
+
+    // --- 3. COMBINED HIERARCHY (Issue 4) ---
+    @GetMapping("/combined")
+    public List<Map<String, Object>> getCombinedView() {
+        System.out.println(">>> REPORTING: Fetching combined report...");
+        return reportingService.getCombinedReport();
+    }
+
+    // --- 4. STATS & RANKINGS (Keep existing) ---
     @GetMapping("/requests/summary")
     public Map<String, Object> getRequestSummary() {
         return reportingService.getServiceRequestSummary();
     }
 
-    @GetMapping("/offers/statistics")
-    public Map<String, Object> getOfferStats() {
-        return reportingService.getOfferStatistics();
-    }
-
     @GetMapping("/providers/rankings")
     public List<Map<String, Object>> getRankings() {
         return reportingService.getProviderRankings();
-    }
-
-    // --- 2. NEW: RAW DATASETS (What Group 5b requested) ---
-
-    @GetMapping("/requests/all")
-    public List<ServiceRequest> getAllRequests() {
-        List<ServiceRequest> data = reportingService.getAllRequestsRaw();
-        System.out.println("\n========== [API REPORTING] POWER BI FETCHING REQUESTS ==========");
-        System.out.println("Action: Sending full dataset (" + data.size() + " records)");
-        System.out.println("==============================================================\n");
-        return data;
-    }
-
-    @GetMapping("/offers/all")
-    public List<ProviderOffer> getAllOffers() {
-        List<ProviderOffer> data = reportingService.getAllOffersRaw();
-        System.out.println("\n========== [API REPORTING] POWER BI FETCHING OFFERS ==========");
-        System.out.println("Action: Sending full dataset (" + data.size() + " records)");
-        System.out.println("============================================================\n");
-        return data;
     }
 }
