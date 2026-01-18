@@ -119,70 +119,70 @@ public class ExternalIntegrationController {
     @PostMapping("/group1/decision")
     public ResponseEntity<String> receive1bDecision(@RequestBody Map<String, Object> payload) {
 
-        System.out.println(">>> [API IN] 1B Payload: " + payload);
+        System.out.println(">>> [API IN] 1B Decision Payload: " + payload);
 
         if (!payload.containsKey("requestId") || !payload.containsKey("decision")) {
-            return ResponseEntity.badRequest()
-                    .body("Error: Missing 'requestId' or 'decision'");
+            return ResponseEntity.badRequest().body("Error: Missing 'requestId' or 'decision'");
         }
 
         try {
-            // ✅ STRING-BASED COMPARISON (TYPE SAFE)
-            String targetReqId = String.valueOf(payload.get("requestId"));
+            // 1. Get the ID provided by 1b (e.g., "1001")
+            String providedId = String.valueOf(payload.get("requestId"));
             String decision = String.valueOf(payload.get("decision"));
 
-            System.out.println(">>> [API IN] Searching waiting process for Request ID: " + targetReqId);
+            Long internalRefId;
+            try {
+                internalRefId = Long.valueOf(providedId);
+            } catch (NumberFormatException e) {
+                return ResponseEntity.badRequest().body("Error: requestId must be numeric.");
+            }
 
-            // 1️⃣ Get ALL executions waiting for the message
-            List<Execution> waitingExecutions =
-                    runtimeService.createExecutionQuery()
-                            .messageEventSubscriptionName("Message_1b_Decision")
-                            .list();
+            // 2. LOOKUP: Find the Database ID (e.g., "2") using the Internal ID (e.g., "1001")
+            ServiceRequest targetRequest = serviceRequestService.getAllServiceRequests().stream()
+                    .filter(r -> r.getInternalRequestId() != null && r.getInternalRequestId().equals(internalRefId))
+                    .findFirst()
+                    .orElse(null);
+
+            if (targetRequest == null) {
+                return ResponseEntity.badRequest().body("Error: No Active Request found for Internal ID " + providedId);
+            }
+
+            // 3. Use the DB ID for Camunda
+            String targetDbId = String.valueOf(targetRequest.getId());
+            System.out.println(">>> [API IN] Mapped Internal ID " + providedId + " -> DB ID " + targetDbId);
+
+            // 4. Find the Process waiting for this DB ID
+            List<Execution> waitingExecutions = runtimeService.createExecutionQuery()
+                    .messageEventSubscriptionName("Message_1b_Decision")
+                    .list();
 
             Execution matchedExecution = null;
 
-            // 2️⃣ Manual, type-safe matching
             for (Execution exec : waitingExecutions) {
-                Object storedReqId =
-                        runtimeService.getVariable(exec.getId(), "requestId");
-
-                if (storedReqId != null &&
-                        String.valueOf(storedReqId).equals(targetReqId)) {
+                Object storedReqId = runtimeService.getVariable(exec.getId(), "requestId");
+                if (storedReqId != null && String.valueOf(storedReqId).equals(targetDbId)) {
                     matchedExecution = exec;
                     break;
                 }
             }
 
-            // 3️⃣ No match → DEBUG OUTPUT
             if (matchedExecution == null) {
-                System.err.println("!!! No matching execution found. Dumping wait states:");
-                for (Execution exec : waitingExecutions) {
-                    System.err.println(
-                            "   - Exec=" + exec.getId()
-                                    + " | requestId="
-                                    + runtimeService.getVariable(exec.getId(), "requestId")
-                    );
-                }
-                return ResponseEntity.badRequest()
-                        .body("No active process found for Request ID " + targetReqId);
+                return ResponseEntity.badRequest().body("No process is waiting for decision on Request " + providedId);
             }
 
-            // 4️⃣ Resume process
-            System.out.println(
-                    ">>> Resuming Process Instance: "
-                            + matchedExecution.getProcessInstanceId());
+            // 5. Resume
+            System.out.println(">>> Resuming Process Instance: " + matchedExecution.getProcessInstanceId());
 
             runtimeService.createMessageCorrelation("Message_1b_Decision")
                     .processInstanceId(matchedExecution.getProcessInstanceId())
                     .setVariable("oneBDecision", decision)
                     .correlate();
 
-            return ResponseEntity.ok("Decision processed successfully.");
+            return ResponseEntity.ok("Decision processed successfully for Internal ID " + providedId);
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError()
-                    .body("Error processing decision: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Error processing decision: " + e.getMessage());
         }
     }
 
