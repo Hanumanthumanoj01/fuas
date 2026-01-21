@@ -21,10 +21,10 @@
       <incoming>Flow_Contract_Invalid</incoming>
       <outgoing>Flow_End_Contract_Fail</outgoing>
     </serviceTask>
-    <endEvent id="Flow_End_Contract_Fail" name="Process Terminated">
-      <incoming>Flow_End_Contract_Fail</incoming>
+<endEvent id="EndEvent_Contract_Fail" name="Process Terminated">
+      <incoming>Flow_To_End_Contract_Fail</incoming>
     </endEvent>
-    <sequenceFlow id="Flow_End_Contract_Fail" sourceRef="Activity_Notify_Rejection" targetRef="Flow_End_Contract_Fail" />
+    <sequenceFlow id="Flow_To_End_Contract_Fail" sourceRef="Activity_Notify_Rejection" targetRef="EndEvent_Contract_Fail" />
     <sequenceFlow id="Flow_Contract_Valid" name="Yes" sourceRef="Gateway_Contract_Valid" targetRef="Activity_PO_Approval">
       <conditionExpression xsi:type="tFormalExpression">${contractValid == true}</conditionExpression>
     </sequenceFlow>
@@ -99,10 +99,10 @@
       <incoming>Flow_1b_No</incoming>
       <outgoing>Flow_End_Reject</outgoing>
     </serviceTask>
-    <endEvent id="Flow_End_Reject" name="Request Rejected by 1b">
-      <incoming>Flow_End_Reject</incoming>
-    </endEvent>
-    <sequenceFlow id="Flow_End_Reject" sourceRef="Activity_Notify_4b_Reject" targetRef="Flow_End_Reject" />
+    <endEvent id="EndEvent_Reject_1b" name="Request Rejected by 1b">
+          <incoming>Flow_To_End_Reject</incoming>
+        </endEvent>
+        <sequenceFlow id="Flow_To_End_Reject" sourceRef="Activity_Notify_4b_Reject" targetRef="EndEvent_Reject_1b" />
     <sequenceFlow id="Flow_1b_Yes" name="Yes" sourceRef="Gateway_1b_Decision" targetRef="Activity_RP_Coordination">
       <conditionExpression xsi:type="tFormalExpression">${oneBDecision == 'ACCEPTED'}</conditionExpression>
     </sequenceFlow>
