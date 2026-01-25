@@ -35,30 +35,36 @@ public class Notify1bRecommendationDelegate implements JavaDelegate {
         Long reqId = (Long) execution.getVariable("requestId");
         Long offerId = (Long) execution.getVariable("selectedOfferId");
 
-        ServiceRequest req = serviceRequestService.getServiceRequestById(reqId).orElseThrow();
-        ProviderOffer offer = offerRepo.findById(offerId).orElseThrow();
+        ServiceRequest req = serviceRequestService.getServiceRequestById(reqId)
+                .orElseThrow(() -> new IllegalStateException("ServiceRequest not found: " + reqId));
 
-        // 1. SKILLS CLEANUP
+        ProviderOffer offer = offerRepo.findById(offerId)
+                .orElseThrow(() -> new IllegalStateException("ProviderOffer not found: " + offerId));
+
+        // --------------------------------------------------
+        // 1. DATA PREPARATION
+        // --------------------------------------------------
         String cleanSkills = "Unknown";
         if (offer.getSkills() != null) {
             cleanSkills = offer.getSkills().replace("[", "").replace("]", "").replace("\"", "").trim();
         }
 
-        // 2. LOCATION LOGIC (PRIORITIZE OFFER, FALLBACK TO REQUEST)
-        String finalLocation = offer.getLocation(); // Try Offer first (from 4b)
+        // Location Logic: Try Offer first (from 4b), then Request
+        String finalLocation = offer.getLocation();
         if (finalLocation == null || finalLocation.isEmpty()) {
-            finalLocation = req.getPerformanceLocation(); // Fallback to Request
+            finalLocation = req.getPerformanceLocation();
         }
         if (finalLocation == null || finalLocation.isEmpty()) {
-            finalLocation = "Frankfurt"; // Safety Fallback
+            finalLocation = "Frankfurt";
         }
 
-        // 3. CONTRACT ID
         String contractId = offer.getContractId();
         if (contractId == null || contractId.isEmpty()) contractId = req.getContractId();
         if (contractId == null) contractId = "CTR-PENDING";
 
-        // 4. BUILD PAYLOAD
+        // --------------------------------------------------
+        // 2. BUILD PAYLOAD
+        // --------------------------------------------------
         Map<String, Object> payload = new HashMap<>();
         payload.put("staffingRequestId", req.getInternalRequestId());
         payload.put("externalEmployeeId", offer.getExternalOfferId());
@@ -67,28 +73,45 @@ public class Notify1bRecommendationDelegate implements JavaDelegate {
         payload.put("lastName", offer.getLastName());
         payload.put("email", offer.getEmail());
         payload.put("wagePerHour", offer.getHourlyRate());
-
         payload.put("skills", cleanSkills);
-        payload.put("location", finalLocation); // ✅ NOW USES 4B VALUE
+        payload.put("location", finalLocation);
         payload.put("experienceYears", offer.getExperienceYears());
         payload.put("contractId", contractId);
         payload.put("evaluationScore", offer.getTotalScore());
         payload.put("projectId", req.getInternalProjectId());
 
-        // 5. SEND & LOG
-        String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
-        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 1B: Recommendation Sent");
-        System.out.println("   PAYLOAD: " + jsonString);
+        // Convert to JSON String here (safe in main thread)
+        String jsonPayload = objectMapper.writeValueAsString(payload);
 
-        String targetUrl = "https://workforce-planning-tool.onrender.com/api/group3b/workforce-response";
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
-            restTemplate.postForObject(targetUrl, requestEntity, String.class);
-            System.out.println(">>> SUCCESS: Real notification sent to Group 1b.");
-        } catch (Exception e) {
-            System.err.println("!!! WARNING: Failed to send to 1b: " + e.getMessage());
-        }
+        // --------------------------------------------------
+        // 3. ASYNCHRONOUS SEND (BACKGROUND THREAD)
+        // --------------------------------------------------
+        // This prevents the UI from hanging waiting for 1b
+        new Thread(() -> {
+            try {
+                System.out.println("\n>>> [ASYNC API OUT] Sending to 1b in background...");
+                System.out.println("   PAYLOAD: " + jsonPayload);
+
+                String targetUrl = "https://workforce-planning-tool.onrender.com/api/group3b/workforce-response";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<String> requestEntity = new HttpEntity<>(jsonPayload, headers);
+
+                restTemplate.postForObject(targetUrl, requestEntity, String.class);
+                System.out.println(">>> [ASYNC SUCCESS] 1b Received the offer.");
+
+            } catch (Exception e) {
+                System.err.println("!!! [ASYNC FAILURE] Could not send to 1b: " + e.getMessage());
+            }
+        }).start();
+
+        // --------------------------------------------------
+        // 4. MAIN THREAD FINISHES IMMEDIATELY
+        // --------------------------------------------------
+        // We log locally and let the process continue to the Wait State
+        System.out.println(">>> Delegate finished. Process moving to Wait State.");
+
+        // 4b Log (kept for reference)
+        System.out.println(">>> [INFO] 4b Offer " + offer.getExternalOfferId() + " is SELECTED_UNDER_VERIFICATION");
     }
 }

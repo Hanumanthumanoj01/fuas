@@ -141,7 +141,9 @@ public class CamundaController {
                 ? auth.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "")
                 : "USER";
 
+        // Call the updated helper
         String comment = buildComment(formData, role);
+
         if (!comment.isEmpty()) {
             String history = getVariableSafe(pid, "commentHistory", String.class);
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM HH:mm"));
@@ -184,13 +186,10 @@ public class CamundaController {
                         requestId, ServiceRequestStatus.UNDER_EVALUATION);
             }
 
-            // =====================================================
-            // ✅ CRITICAL FIX — PO VALIDATE (PROCESS SCOPE)
-            // =====================================================
+            // ---- PO VALIDATE ----
             if ("Activity_PO_Validate".equals(key)) {
                 boolean verified = Boolean.parseBoolean(formData.get("verified"));
 
-                // 🔥 MUST BE PROCESS-SCOPE
                 runtimeService.setVariable(pid, "selectionApproved", verified);
                 vars.put("selectionApproved", verified);
 
@@ -230,19 +229,36 @@ public class CamundaController {
     }
 
     // =====================================================
-    // HELPERS
+    // HELPERS (FIXED LOGIC)
     // =====================================================
     private String buildComment(Map<String, String> data, String role) {
-        if (data.containsKey("rejectionReason"))
+
+        // 1. REJECTION (Prioritize this)
+        if (data.containsKey("rejectionReason") && !data.get("rejectionReason").isBlank()) {
             return "🔴 REJECTED by " + role + ": " + data.get("rejectionReason");
+        }
 
-        if (data.containsKey("selectionReason"))
-            return "🟢 SELECTED by PM: " + data.get("selectionReason");
-
-        if (data.containsKey("pmJustification"))
+        // 2. RESUBMISSION
+        if (data.containsKey("pmJustification") && !data.get("pmJustification").isBlank()) {
             return "🔵 RESUBMITTED by PM: " + data.get("pmJustification");
+        }
 
-        return "";
+        // 3. SELECTION
+        if (data.containsKey("selectionReason") && !data.get("selectionReason").isBlank()) {
+            return "🟢 SELECTED by PM: " + data.get("selectionReason");
+        }
+
+        // 4. APPROVAL (This was missing!)
+        if ("true".equalsIgnoreCase(data.get("approved"))) {
+            return "🟢 APPROVED by " + role;
+        }
+
+        // 5. VERIFICATION (PO Validation step)
+        if ("true".equalsIgnoreCase(data.get("verified"))) {
+            return "🟢 VERIFIED by " + role;
+        }
+
+        return ""; // Default no comment
     }
 
     private <T> T getVariableSafe(String pid, String name, Class<T> type) {

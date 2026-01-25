@@ -1,140 +1,26 @@
 package com.frauas.servicemanagement.delegate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.frauas.servicemanagement.entity.ProviderOffer;
-import com.frauas.servicemanagement.entity.ServiceRequest;
-import com.frauas.servicemanagement.repository.ProviderOfferRepository;
-import com.frauas.servicemanagement.service.ServiceRequestService;
-
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.JavaDelegate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @Component("notifyWorkforceDelegate")
 public class NotifyWorkforceDelegate implements JavaDelegate {
 
-    @Autowired
-    private ServiceRequestService serviceRequestService;
-
-    @Autowired
-    private ProviderOfferRepository offerRepo;
-
-    // Use RestTemplate to send HTTP requests
-    private final RestTemplate restTemplate = new RestTemplate();
-    // Use ObjectMapper to create clean JSON strings
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
     @Override
     public void execute(DelegateExecution execution) throws Exception {
+        // We already sent the data to 1b in the 'Notify1bRecommendationDelegate' step.
+        // 1b has already accepted.
+        // We have already created the Service Order.
 
-        Long reqId = (Long) execution.getVariable("requestId");
-        Long offerId = (Long) execution.getVariable("selectedOfferId");
+        // This is just the final system log. DO NOT send API to 1b again.
 
-        if (reqId == null || offerId == null) {
-            throw new IllegalStateException("Missing process variables: requestId or selectedOfferId");
-        }
-
-        ServiceRequest req = serviceRequestService.getServiceRequestById(reqId)
-                .orElseThrow(() -> new IllegalStateException("ServiceRequest not found: " + reqId));
-
-        ProviderOffer offer = offerRepo.findById(offerId)
-                .orElseThrow(() -> new IllegalStateException("ProviderOffer not found: " + offerId));
-
-        // --------------------------------------------------
-        // 1. Format Skills (Clean String: "java,python")
-        // --------------------------------------------------
-        String cleanSkills = "Unknown";
-        if (offer.getSkills() != null) {
-            // Remove brackets [] and quotes "" to make it a raw comma-separated string
-            cleanSkills = offer.getSkills()
-                    .replace("[", "")
-                    .replace("]", "")
-                    .replace("\"", "")
-                    .trim();
-        }
-
-        // --------------------------------------------------
-        // 2. Get Location & Contract (With Safety Checks)
-        // --------------------------------------------------
-        String location = req.getPerformanceLocation();
-        if (location == null || location.isEmpty()) {
-            location = "Frankfurt"; // Default fallback
-        }
-
-        String contractId = offer.getContractId();
-        if (contractId == null || contractId.isEmpty()) {
-            contractId = req.getContractId(); // Fallback to Request's contract
-        }
-        if (contractId == null || contractId.isEmpty()) {
-            contractId = "CTR-PENDING"; // Final safety fallback
-        }
-
-        // --------------------------------------------------
-        // 3. Build the Payload Object (Exact 1b Format)
-        // --------------------------------------------------
-        Map<String, Object> payload = new HashMap<>();
-
-        // ID MAPPING: They asked for 'staffingRequestId' (Their ID), NOT our DB ID.
-        payload.put("staffingRequestId", req.getInternalRequestId());
-
-        payload.put("externalEmployeeId", offer.getExternalOfferId());
-        payload.put("provider", offer.getProviderName());
-        payload.put("firstName", offer.getFirstName());
-        payload.put("lastName", offer.getLastName());
-        payload.put("email", offer.getEmail());
-        payload.put("wagePerHour", offer.getHourlyRate());
-
-        // NEW FIELDS REQUESTED BY 1B
-        payload.put("skills", cleanSkills);       // "java,python"
-        payload.put("location", location);        // "efa"
-        payload.put("experienceYears", offer.getExperienceYears());
-
-        payload.put("contractId", contractId);
-        payload.put("evaluationScore", offer.getTotalScore());
-
-        // ID MAPPING: They asked for 'projectId' (Their Project ID)
-        payload.put("projectId", req.getInternalProjectId());
-
-        // REMOVED: status field as per your request
-
-        // --------------------------------------------------
-        // 4. LOGGING (Console)
-        // --------------------------------------------------
-        String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
-
-        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 1B: Recommendation Sent");
-        System.out.println("   ENDPOINT: POST https://workforce-planning-tool.onrender.com/api/group3b/workforce-response");
-        System.out.println("   PAYLOAD: " + jsonString);
+        System.out.println("\n=========================================================");
+        System.out.println(">>> [FINAL STEP] PROCESS COMPLETED SUCCESSFULLY.");
+        System.out.println(">>> 1b previously accepted the offer.");
+        System.out.println(">>> Service Order generated.");
+        System.out.println(">>> 4b notified of the win.");
+        System.out.println(">>> Updating Internal Workforce Status: COMPLETED");
         System.out.println("=========================================================\n");
-
-        // --------------------------------------------------
-        // 5. SEND REAL REQUEST
-        // --------------------------------------------------
-        String targetUrl = "https://workforce-planning-tool.onrender.com/api/group3b/workforce-response";
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(payload, headers);
-
-            // Send the request but DON'T fail the process if they are down
-            restTemplate.postForObject(targetUrl, requestEntity, String.class);
-
-            System.out.println(">>> SUCCESS: Real notification successfully sent to Group 1b API.");
-
-        } catch (Exception e) {
-            System.err.println("!!! WARNING: Failed to send real notification to Group 1b. Their server might be down or rejected the format.");
-            System.err.println("!!! Error Details: " + e.getMessage());
-            // We catch the error so the process flow continues (doesn't crash)
-        }
     }
 }
