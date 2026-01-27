@@ -75,10 +75,10 @@ public class Notify1bRecommendationDelegate implements JavaDelegate {
         payload.put("wagePerHour", offer.getHourlyRate());
         payload.put("skills", cleanSkills);
         payload.put("location", finalLocation);
-        payload.put("experienceYears", offer.getExperienceYears());
         payload.put("contractId", contractId);
         payload.put("evaluationScore", offer.getTotalScore());
         payload.put("projectId", req.getInternalProjectId());
+        payload.put("experienceYears", offer.getExperienceYears());
 
         // Convert to JSON String here (safe in main thread)
         String jsonPayload = objectMapper.writeValueAsString(payload);

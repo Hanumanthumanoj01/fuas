@@ -69,7 +69,7 @@ public class PublishToProvidersDelegate implements JavaDelegate {
         // --------------------------------------------------
         String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
 
-        // YOUR UNIQUE WEBHOOK URL
+        // 4b link
         String targetUrl = "https://webhook.site/5d443921-f154-4539-b40b-569db0976f7c";
 
         System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 4B: Publishing Open Request");
