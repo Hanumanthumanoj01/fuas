@@ -55,24 +55,38 @@ public class PublishToProvidersDelegate implements JavaDelegate {
         // --------------------------------------------------
         Map<String, Object> payload = new HashMap<>();
         payload.put("internalRequestId", req.getInternalRequestId());
+        payload.put("contractId", req.getContractId());
         payload.put("title", req.getTitle());
         payload.put("description", req.getDescription());
-        payload.put("skills", skillsList);
-        payload.put("budget", req.getHourlyRate());
-        payload.put("contractId", req.getContractId());
+        payload.put("projectName", req.getInternalProjectName());
         payload.put("startDate", req.getStartDate());
         payload.put("endDate", req.getEndDate());
+        payload.put("skills", skillsList);
+        payload.put("budget", req.getHourlyRate());
         payload.put("location", req.getPerformanceLocation());
 
         // --------------------------------------------------
         // 3. SEND TO WEBHOOK (TESTING)
         // --------------------------------------------------
         String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
-
+        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 4B: Publishing Open Request");
         // 4b link
         String targetUrl = "https://providermanagement-arg3e3hsgwefarbr.germanywestcentral-01.azurewebsites.net/api/ServiceRequestApi/ReceiveServiceRequest";
 
-        System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 4B: Publishing Open Request");
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> requestEntity =
+                    new HttpEntity<>(payload, headers);
+
+            restTemplate.postForObject(targetUrl, requestEntity, String.class);
+            System.out.println(">>> SUCCESS: 4B received the service request.");
+
+        } catch (Exception e) {
+            System.err.println("!!! [FAILURE] Could not send to 4B: " + e.getMessage());
+        }
+
+
         System.out.println("    ENDPOINT: " + targetUrl);
         System.out.println("    PAYLOAD: " + jsonString);
 
