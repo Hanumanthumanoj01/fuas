@@ -70,7 +70,7 @@ public class PublishToProvidersDelegate implements JavaDelegate {
         String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
 
         // 4b link
-        String targetUrl = "https://webhook.site/5d443921-f154-4539-b40b-569db0976f7c";
+        String targetUrl = "https://providermanagement-arg3e3hsgwefarbr.germanywestcentral-01.azurewebsites.net/api/ServiceRequestApi/ReceiveServiceRequest";
 
         System.out.println("\n>>> [API OUT] GROUP 3B -> GROUP 4B: Publishing Open Request");
         System.out.println("    ENDPOINT: " + targetUrl);
